@@ -1,0 +1,12 @@
+{
+    "rewrites": [
+        {
+            "source": "/wheels.csv",
+            "destination": "/wheels.csv"
+        },
+        {
+            "source": "/(.*)",
+            "destination": "/index.html"
+        }
+    ]
+}
