@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Loader2, Trash2, Search, Video, Camera } from 'lucide-react';
+import { X, Loader2, Search, Video, Camera } from 'lucide-react';
 import { supabase } from '../../../lib/supabase';
 import { IndividualWheel } from '../../../types/wheel';
 import { useWheelCsv } from './useWheelCsv';
@@ -33,7 +33,7 @@ const AddWheelModal: React.FC<AddWheelModalProps> = ({ onClose, onSaved, wheelTo
 
     const { wheels, models } = useWheelCsv();
 
-    // Fecha sugestões ao clicar fora (Crítico para Mobile)
+    // Fecha sugestões ao clicar fora
     useEffect(() => {
         function handleClickOutside(event: MouseEvent) {
             if (suggestionRef.current && !suggestionRef.current.contains(event.target as Node)) {
@@ -66,10 +66,29 @@ const AddWheelModal: React.FC<AddWheelModalProps> = ({ onClose, onSaved, wheelTo
         }
     }, [wheelToEdit]);
 
+    // Lógica de Filtros em Cascata
     const filteredModels = models.filter(m => m.toLowerCase().includes(searchTerm.toLowerCase()));
+    
     const arosByModel = [...new Set(wheels.filter(w => w.modelo === form.model).map(w => w.aro))];
-    const furacoesByAro = [...new Set(wheels.filter(w => w.modelo === form.model && w.aro === form.size).map(w => w.furacao))];
-    const acabamentosByCombo = [...new Set(wheels.filter(w => w.modelo === form.model && w.aro === form.size && w.furacao === form.boltPattern).map(w => w.acabamento))];
+    
+    const furacoesByAro = [...new Set(wheels.filter(w => 
+        w.modelo === form.model && 
+        w.aro === form.size
+    ).map(w => w.furacao))];
+    
+    const acabamentosByCombo = [...new Set(wheels.filter(w => 
+        w.modelo === form.model && 
+        w.aro === form.size && 
+        w.furacao === form.boltPattern
+    ).map(w => w.acabamento))];
+
+    // NOVO: Filtro para buscar os Offsets (ET) disponíveis
+    const offsetsByCombo = [...new Set(wheels.filter(w => 
+        w.modelo === form.model && 
+        w.aro === form.size && 
+        w.furacao === form.boltPattern &&
+        w.acabamento === form.finish
+    ).map(w => w.et))].sort((a, b) => Number(a) - Number(b));
 
     const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>, index: number) => {
         if (e.target.files?.[0]) {
@@ -149,17 +168,17 @@ const AddWheelModal: React.FC<AddWheelModalProps> = ({ onClose, onSaved, wheelTo
             <div className="bg-white w-full max-w-2xl rounded-3xl shadow-2xl flex flex-col max-h-[95vh]">
 
                 <div className="flex items-center justify-between p-5 border-b">
-                    <h2 className="text-xl font-black uppercase italic italic">{wheelToEdit ? 'Editar Roda' : 'Nova Roda'}</h2>
+                    <h2 className="text-xl font-black uppercase italic">{wheelToEdit ? 'Editar Roda' : 'Nova Roda'}</h2>
                     <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full transition-colors"><X /></button>
                 </div>
 
-                {/* IMPORTANTE: Adicionado overflow-visible para que o menu suspenso não seja cortado */}
                 <div className="p-5 space-y-6 overflow-y-auto overflow-x-visible custom-scroll">
+                    {/* Upload de Mídia */}
                     <div className="grid grid-cols-4 gap-3">
                         {photos.map((photo, i) => (
                             <label key={i} className="aspect-square border-2 border-dashed border-gray-200 rounded-2xl flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 overflow-hidden relative">
                                 {photo ? (
-                                    <img src={typeof photo === 'string' ? photo : URL.createObjectURL(photo)} className="w-full h-full object-cover" />
+                                    <img src={typeof photo === 'string' ? photo : URL.createObjectURL(photo)} className="w-full h-full object-cover" alt="Preview" />
                                 ) : (
                                     <div className="text-center">
                                         <Camera className="text-gray-300 mx-auto" size={20} />
@@ -184,6 +203,7 @@ const AddWheelModal: React.FC<AddWheelModalProps> = ({ onClose, onSaved, wheelTo
                     </div>
 
                     <div className="space-y-4">
+                        {/* Busca de Modelo */}
                         <div className="relative">
                             <div className="relative z-[70]">
                                 <Search className="absolute left-3 top-3.5 text-gray-400" size={16} />
@@ -198,7 +218,6 @@ const AddWheelModal: React.FC<AddWheelModalProps> = ({ onClose, onSaved, wheelTo
                                 />
                             </div>
 
-                            {/* MENU SUSPENSO COM Z-INDEX FORÇADO */}
                             {showSuggestions && filteredModels.length > 0 && (
                                 <div
                                     ref={suggestionRef}
@@ -223,6 +242,7 @@ const AddWheelModal: React.FC<AddWheelModalProps> = ({ onClose, onSaved, wheelTo
                             )}
                         </div>
 
+                        {/* Seleção de Aro e Furação */}
                         <div className="grid grid-cols-2 gap-4">
                             <select value={form.size} disabled={!form.model} onChange={e => setForm({ ...form, size: e.target.value, boltPattern: '', finish: '', offset: '' })} className={fieldClass}>
                                 <option value="">Aro</option>
@@ -234,24 +254,24 @@ const AddWheelModal: React.FC<AddWheelModalProps> = ({ onClose, onSaved, wheelTo
                             </select>
                         </div>
 
+                        {/* Seleção de Acabamento e Offset (ET) */}
                         <div className="grid grid-cols-2 gap-4">
                             <select value={form.finish} disabled={!form.boltPattern} onChange={e => setForm({ ...form, finish: e.target.value, offset: '' })} className={fieldClass}>
                                 <option value="">Acabamento</option>
                                 {acabamentosByCombo.map(a => <option key={a} value={a}>{a}</option>)}
                             </select>
 
-                            <div className="relative">
-                                <input
-                                    type="number"
-                                    placeholder="ET (Offset)"
-                                    className={`${fieldClass} pr-10`}
-                                    value={form.offset}
-                                    onChange={e => setForm({ ...form, offset: e.target.value })}
-                                />
-                                <div className="absolute inset-y-0 right-3 flex items-center pointer-events-none">
-                                    <span className="text-[10px] font-black text-gray-400 uppercase">mm</span>
-                                </div>
-                            </div>
+                            <select 
+                                value={form.offset} 
+                                disabled={!form.finish} 
+                                onChange={e => setForm({ ...form, offset: e.target.value })} 
+                                className={fieldClass}
+                            >
+                                <option value="">ET (Offset)</option>
+                                {offsetsByCombo.map(et => (
+                                    <option key={et} value={et}>{et}mm</option>
+                                ))}
+                            </select>
                         </div>
 
                         <textarea
@@ -262,7 +282,10 @@ const AddWheelModal: React.FC<AddWheelModalProps> = ({ onClose, onSaved, wheelTo
                         />
                     </div>
 
-                    <DefectTags selected={form.defects} onToggle={(d) => setForm(f => ({ ...f, defects: f.defects.includes(d) ? f.defects.filter(x => x !== d) : [...f.defects, d] }))} />
+                    <DefectTags 
+                        selected={form.defects} 
+                        onToggle={(d) => setForm(f => ({ ...f, defects: f.defects.includes(d) ? f.defects.filter(x => x !== d) : [...f.defects, d] }))} 
+                    />
                 </div>
 
                 <div className="p-6 border-t bg-gray-50 flex justify-end gap-3 rounded-b-3xl">
@@ -277,3 +300,5 @@ const AddWheelModal: React.FC<AddWheelModalProps> = ({ onClose, onSaved, wheelTo
 };
 
 export default AddWheelModal;
+
+                
