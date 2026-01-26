@@ -7,7 +7,7 @@ export function useWheelCsv() {
     const [models, setModels] = useState<string[]>([]);
 
     useEffect(() => {
-        fetch("/src/assets/wheels.csv")
+        fetch("/wheels.csv")
             .then((res) => res.text())
             .then((csvText) => {
                 const parsed = Papa.parse(csvText, {
