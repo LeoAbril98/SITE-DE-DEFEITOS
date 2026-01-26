@@ -262,16 +262,18 @@ const AddWheelModal: React.FC<AddWheelModalProps> = ({ onClose, onSaved, wheelTo
                             </select>
 
                             <select 
-                                value={form.offset} 
-                                disabled={!form.finish} 
-                                onChange={e => setForm({ ...form, offset: e.target.value })} 
-                                className={fieldClass}
-                            >
-                                <option value="">ET (Offset)</option>
-                                {offsetsByCombo.map(et => (
-                                    <option key={et} value={et}>{et}mm</option>
-                                ))}
-                            </select>
+    value={form.offset} 
+    disabled={!form.finish} 
+    onChange={e => setForm({ ...form, offset: e.target.value })} 
+    className={fieldClass}
+>
+    <option value="">ET (Offset)</option>
+    {offsetsByCombo.map(et => (
+        <option key={et} value={et}>
+            {et} {/* Aqui removi o 'mm' que eu tinha colocado antes */}
+        </option>
+    ))}
+</select>
                         </div>
 
                         <textarea
