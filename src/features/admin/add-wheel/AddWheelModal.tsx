@@ -29,13 +29,11 @@ const AddWheelModal: React.FC<AddWheelModalProps> = ({ onClose, onSaved, wheelTo
     const [videoPreview, setVideoPreview] = useState<string | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
     const [showSuggestions, setShowSuggestions] = useState(false);
-
-    // Referência para detectar clique fora do menu de sugestões
     const suggestionRef = useRef<HTMLDivElement>(null);
 
     const { wheels, models } = useWheelCsv();
 
-    // Fecha o menu de sugestões ao clicar em qualquer outro lugar (essencial para Mobile)
+    // Fecha sugestões ao clicar fora (Crítico para Mobile)
     useEffect(() => {
         function handleClickOutside(event: MouseEvent) {
             if (suggestionRef.current && !suggestionRef.current.contains(event.target as Node)) {
@@ -112,8 +110,7 @@ const AddWheelModal: React.FC<AddWheelModalProps> = ({ onClose, onSaved, wheelTo
             if (video instanceof File) {
                 const ext = video.name.split('.').pop() || 'mp4';
                 const path = `videos/vid_${crypto.randomUUID()}.${ext}`;
-                const { error: videoError } = await supabase.storage.from('wheel-photos').upload(path, video);
-                if (videoError) throw videoError;
+                await supabase.storage.from('wheel-photos').upload(path, video);
                 const { data } = supabase.storage.from('wheel-photos').getPublicUrl(path);
                 finalVideoUrl = data.publicUrl;
             }
@@ -132,13 +129,10 @@ const AddWheelModal: React.FC<AddWheelModalProps> = ({ onClose, onSaved, wheelTo
             };
 
             if (wheelToEdit) {
-                const { error } = await supabase.from('individual_wheels').update(wheelData).eq('id', wheelToEdit.id);
-                if (error) throw error;
+                await supabase.from('individual_wheels').update(wheelData).eq('id', wheelToEdit.id);
             } else {
-                const { error } = await supabase.from('individual_wheels').insert([wheelData]);
-                if (error) throw error;
+                await supabase.from('individual_wheels').insert([wheelData]);
             }
-
             onSaved();
             onClose();
         } catch (err: any) {
@@ -151,20 +145,21 @@ const AddWheelModal: React.FC<AddWheelModalProps> = ({ onClose, onSaved, wheelTo
     const fieldClass = 'w-full border-2 rounded-xl p-3 text-base bg-white focus:border-black outline-none transition-all disabled:bg-gray-50';
 
     return (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-2 sm:p-4">
-            <div className="bg-white w-full max-w-2xl rounded-3xl shadow-2xl flex flex-col max-h-[98vh] sm:max-h-[95vh]">
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-2">
+            <div className="bg-white w-full max-w-2xl rounded-3xl shadow-2xl flex flex-col max-h-[95vh]">
 
                 <div className="flex items-center justify-between p-5 border-b">
-                    <h2 className="text-xl font-black uppercase italic">{wheelToEdit ? 'Editar Roda' : 'Nova Roda'}</h2>
+                    <h2 className="text-xl font-black uppercase italic italic">{wheelToEdit ? 'Editar Roda' : 'Nova Roda'}</h2>
                     <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full transition-colors"><X /></button>
                 </div>
 
-                <div className="p-5 space-y-6 overflow-y-auto">
+                {/* IMPORTANTE: Adicionado overflow-visible para que o menu suspenso não seja cortado */}
+                <div className="p-5 space-y-6 overflow-y-auto overflow-x-visible custom-scroll">
                     <div className="grid grid-cols-4 gap-3">
                         {photos.map((photo, i) => (
                             <label key={i} className="aspect-square border-2 border-dashed border-gray-200 rounded-2xl flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 overflow-hidden relative">
                                 {photo ? (
-                                    <img src={typeof photo === 'string' ? photo : URL.createObjectURL(photo)} className="w-full h-full object-cover" alt="Wheel" />
+                                    <img src={typeof photo === 'string' ? photo : URL.createObjectURL(photo)} className="w-full h-full object-cover" />
                                 ) : (
                                     <div className="text-center">
                                         <Camera className="text-gray-300 mx-auto" size={20} />
@@ -203,11 +198,12 @@ const AddWheelModal: React.FC<AddWheelModalProps> = ({ onClose, onSaved, wheelTo
                                 />
                             </div>
 
-                            {/* MENU SUSPENSO CORRIGIDO PARA MOBILE */}
+                            {/* MENU SUSPENSO COM Z-INDEX FORÇADO */}
                             {showSuggestions && filteredModels.length > 0 && (
                                 <div
                                     ref={suggestionRef}
-                                    className="absolute left-0 right-0 z-[100] mt-1 bg-white border-2 border-black rounded-xl shadow-2xl max-h-56 overflow-y-auto"
+                                    style={{ zIndex: 999 }}
+                                    className="absolute left-0 right-0 mt-1 bg-white border-2 border-black rounded-xl shadow-2xl max-h-56 overflow-y-auto"
                                 >
                                     {filteredModels.map(m => (
                                         <button
