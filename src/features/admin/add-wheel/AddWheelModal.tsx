@@ -65,7 +65,7 @@ const AddWheelModal: React.FC<AddWheelModalProps> = ({ onClose, onSaved, wheelTo
         }
     }, [wheelToEdit]);
 
-    // LÓGICA DE FILTRAGEM (AJUSTADA PARA COLUNA 'offset')
+    // FILTROS EM CASCATA
     const filteredModels = models.filter(m => m.toLowerCase().includes(searchTerm.toLowerCase()));
     
     const arosByModel = [...new Set(wheels.filter(w => w.modelo === form.model).map(w => w.aro))];
@@ -78,7 +78,7 @@ const AddWheelModal: React.FC<AddWheelModalProps> = ({ onClose, onSaved, wheelTo
         w.modelo === form.model && w.aro === form.size && w.furacao === form.boltPattern
     ).map(w => w.acabamento))];
 
-    // Busca os Offsets baseados na coluna 'offset' do seu CSV
+    // BUSCA OS OFFSETS PELA COLUNA 'offset' DO CSV
     const offsetsByCombo = [...new Set(wheels.filter(w => 
         w.modelo === form.model && 
         w.aro === form.size && 
@@ -136,7 +136,7 @@ const AddWheelModal: React.FC<AddWheelModalProps> = ({ onClose, onSaved, wheelTo
                 size: form.size,
                 bolt_pattern: form.boltPattern,
                 finish: form.finish,
-                wheel_offset: Number(form.offset), // Converte para número ao salvar
+                wheel_offset: Number(form.offset),
                 description: form.description,
                 defects: form.defects,
                 photos: photoUrls,
@@ -169,6 +169,7 @@ const AddWheelModal: React.FC<AddWheelModalProps> = ({ onClose, onSaved, wheelTo
                 </div>
 
                 <div className="p-5 space-y-6 overflow-y-auto overflow-x-visible custom-scroll">
+                    {/* Fotos e Vídeo */}
                     <div className="grid grid-cols-4 gap-3">
                         {photos.map((photo, i) => (
                             <label key={i} className="aspect-square border-2 border-dashed border-gray-200 rounded-2xl flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 overflow-hidden relative">
@@ -198,6 +199,7 @@ const AddWheelModal: React.FC<AddWheelModalProps> = ({ onClose, onSaved, wheelTo
                     </div>
 
                     <div className="space-y-4">
+                        {/* Modelo com sugestões customizadas */}
                         <div className="relative">
                             <div className="relative z-[70]">
                                 <Search className="absolute left-3 top-3.5 text-gray-400" size={16} />
@@ -228,6 +230,7 @@ const AddWheelModal: React.FC<AddWheelModalProps> = ({ onClose, onSaved, wheelTo
                             )}
                         </div>
 
+                        {/* Aro e Furação */}
                         <div className="grid grid-cols-2 gap-4">
                             <select value={form.size} disabled={!form.model} onChange={e => setForm({ ...form, size: e.target.value, boltPattern: '', finish: '', offset: '' })} className={fieldClass}>
                                 <option value="">Aro</option>
@@ -239,32 +242,24 @@ const AddWheelModal: React.FC<AddWheelModalProps> = ({ onClose, onSaved, wheelTo
                             </select>
                         </div>
 
+                        {/* Acabamento e Offset (Selects iguais) */}
                         <div className="grid grid-cols-2 gap-4">
                             <select value={form.finish} disabled={!form.boltPattern} onChange={e => setForm({ ...form, finish: e.target.value, offset: '' })} className={fieldClass}>
                                 <option value="">Acabamento</option>
                                 {acabamentosByCombo.map(a => <option key={a} value={a}>{a}</option>)}
                             </select>
 
-                            {/* CAMPO OFFSET EDITÁVEL COM SUGESTÕES (DATALIST) */}
-                            <div className="relative">
-                                <input
-                                    list="offset-options"
-                                    type="text"
-                                    placeholder="ET (Offset)"
-                                    className={`${fieldClass} pr-10`}
-                                    value={form.offset}
-                                    disabled={!form.finish}
-                                    onChange={e => setForm({ ...form, offset: e.target.value })}
-                                />
-                                <datalist id="offset-options">
-                                    {offsetsByCombo.map(ot => (
-                                        <option key={ot} value={ot} />
-                                    ))}
-                                </datalist>
-                                <div className="absolute inset-y-0 right-3 flex items-center pointer-events-none">
-                                    <span className="text-[10px] font-black text-gray-400 uppercase">mm</span>
-                                </div>
-                            </div>
+                            <select 
+                                value={form.offset} 
+                                disabled={!form.finish} 
+                                onChange={e => setForm({ ...form, offset: e.target.value })} 
+                                className={fieldClass}
+                            >
+                                <option value="">ET (Offset)</option>
+                                {offsetsByCombo.map(ot => (
+                                    <option key={ot} value={ot}>{ot} mm</option>
+                                ))}
+                            </select>
                         </div>
 
                         <textarea
