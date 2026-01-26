@@ -24,17 +24,27 @@ const AddWheelModal: React.FC<AddWheelModalProps> = ({ onClose, onSaved, wheelTo
     });
 
     const [saving, setSaving] = useState(false);
-
-    // MÍDIA: 3 Slots fixos e 1 Vídeo
     const [photos, setPhotos] = useState<(File | string | null)[]>([null, null, null]);
     const [video, setVideo] = useState<File | string | null>(null);
     const [videoPreview, setVideoPreview] = useState<string | null>(null);
-
     const [searchTerm, setSearchTerm] = useState('');
     const [showSuggestions, setShowSuggestions] = useState(false);
+
+    // Referência para detectar clique fora do menu de sugestões
     const suggestionRef = useRef<HTMLDivElement>(null);
 
     const { wheels, models } = useWheelCsv();
+
+    // Fecha o menu de sugestões ao clicar em qualquer outro lugar (essencial para Mobile)
+    useEffect(() => {
+        function handleClickOutside(event: MouseEvent) {
+            if (suggestionRef.current && !suggestionRef.current.contains(event.target as Node)) {
+                setShowSuggestions(false);
+            }
+        }
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, []);
 
     useEffect(() => {
         if (wheelToEdit) {
@@ -49,10 +59,8 @@ const AddWheelModal: React.FC<AddWheelModalProps> = ({ onClose, onSaved, wheelTo
                 defects: wheelToEdit.defects || [],
             });
             setSearchTerm(wheelToEdit.model);
-
             const existing = wheelToEdit.photos || [];
             setPhotos([existing[0] || null, existing[1] || null, existing[2] || null]);
-
             if (wheelToEdit.video_url) {
                 setVideo(wheelToEdit.video_url);
                 setVideoPreview(wheelToEdit.video_url);
@@ -85,11 +93,8 @@ const AddWheelModal: React.FC<AddWheelModalProps> = ({ onClose, onSaved, wheelTo
     async function handleSave() {
         if (!form.model || !form.size || saving) return;
         setSaving(true);
-
         try {
             const photoUrls: string[] = [];
-
-            // 1. Upload Fotos para o Storage
             for (let i = 0; i < photos.length; i++) {
                 const item = photos[i];
                 if (item instanceof File) {
@@ -103,23 +108,16 @@ const AddWheelModal: React.FC<AddWheelModalProps> = ({ onClose, onSaved, wheelTo
                 }
             }
 
-            // 2. Upload do VÍDEO para o Storage (AQUI ESTAVA O FOCO DO ERRO)
             let finalVideoUrl = typeof video === 'string' ? video : null;
-
             if (video instanceof File) {
                 const ext = video.name.split('.').pop() || 'mp4';
                 const path = `videos/vid_${crypto.randomUUID()}.${ext}`;
-
-                // Faz o upload do arquivo real do vídeo
                 const { error: videoError } = await supabase.storage.from('wheel-photos').upload(path, video);
                 if (videoError) throw videoError;
-
-                // Pega a URL pública gerada
                 const { data } = supabase.storage.from('wheel-photos').getPublicUrl(path);
                 finalVideoUrl = data.publicUrl;
             }
 
-            // 3. Objeto Final com video_url incluído
             const wheelData = {
                 model: form.model,
                 brand: form.brand,
@@ -130,7 +128,7 @@ const AddWheelModal: React.FC<AddWheelModalProps> = ({ onClose, onSaved, wheelTo
                 description: form.description,
                 defects: form.defects,
                 photos: photoUrls,
-                video_url: finalVideoUrl // 👈 ESSENCIAL: Persistindo no Banco
+                video_url: finalVideoUrl
             };
 
             if (wheelToEdit) {
@@ -150,24 +148,23 @@ const AddWheelModal: React.FC<AddWheelModalProps> = ({ onClose, onSaved, wheelTo
         }
     }
 
-    const fieldClass = 'w-full border-2 rounded-xl p-3 text-sm bg-white focus:border-black outline-none transition-all disabled:bg-gray-50';
+    const fieldClass = 'w-full border-2 rounded-xl p-3 text-base bg-white focus:border-black outline-none transition-all disabled:bg-gray-50';
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-            <div className="bg-white w-full max-w-2xl rounded-3xl shadow-2xl flex flex-col max-h-[95vh]">
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-2 sm:p-4">
+            <div className="bg-white w-full max-w-2xl rounded-3xl shadow-2xl flex flex-col max-h-[98vh] sm:max-h-[95vh]">
 
-                <div className="flex items-center justify-between p-6 border-b">
-                    <h2 className="text-xl font-black uppercase italic italic">{wheelToEdit ? 'Editar Roda' : 'Nova Roda'}</h2>
+                <div className="flex items-center justify-between p-5 border-b">
+                    <h2 className="text-xl font-black uppercase italic">{wheelToEdit ? 'Editar Roda' : 'Nova Roda'}</h2>
                     <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full transition-colors"><X /></button>
                 </div>
 
-                <div className="p-6 space-y-6 overflow-y-auto">
-                    {/* GRID DE MÍDIA */}
+                <div className="p-5 space-y-6 overflow-y-auto">
                     <div className="grid grid-cols-4 gap-3">
                         {photos.map((photo, i) => (
                             <label key={i} className="aspect-square border-2 border-dashed border-gray-200 rounded-2xl flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 overflow-hidden relative">
                                 {photo ? (
-                                    <img src={typeof photo === 'string' ? photo : URL.createObjectURL(photo)} className="w-full h-full object-cover" />
+                                    <img src={typeof photo === 'string' ? photo : URL.createObjectURL(photo)} className="w-full h-full object-cover" alt="Wheel" />
                                 ) : (
                                     <div className="text-center">
                                         <Camera className="text-gray-300 mx-auto" size={20} />
@@ -192,26 +189,31 @@ const AddWheelModal: React.FC<AddWheelModalProps> = ({ onClose, onSaved, wheelTo
                     </div>
 
                     <div className="space-y-4">
-                        {/* AUTOCOMPLETE E SELECTS (MANTIDOS) */}
                         <div className="relative">
-                            <div className="relative">
+                            <div className="relative z-[70]">
                                 <Search className="absolute left-3 top-3.5 text-gray-400" size={16} />
                                 <input
                                     type="text"
                                     placeholder="Comece a digitar o modelo..."
                                     className={`${fieldClass} pl-10`}
                                     value={searchTerm}
+                                    autoComplete="off"
                                     onChange={(e) => { setSearchTerm(e.target.value); setShowSuggestions(true); }}
                                     onFocus={() => setShowSuggestions(true)}
                                 />
                             </div>
 
-                            {showSuggestions && searchTerm.length > 0 && (
-                                <div ref={suggestionRef} className="absolute z-10 w-full mt-1 bg-white border-2 rounded-xl shadow-xl max-h-48 overflow-y-auto">
+                            {/* MENU SUSPENSO CORRIGIDO PARA MOBILE */}
+                            {showSuggestions && filteredModels.length > 0 && (
+                                <div
+                                    ref={suggestionRef}
+                                    className="absolute left-0 right-0 z-[100] mt-1 bg-white border-2 border-black rounded-xl shadow-2xl max-h-56 overflow-y-auto"
+                                >
                                     {filteredModels.map(m => (
                                         <button
                                             key={m}
-                                            className="w-full text-left px-4 py-3 hover:bg-gray-50 text-sm font-bold uppercase"
+                                            type="button"
+                                            className="w-full text-left px-4 py-4 hover:bg-gray-100 border-b last:border-0 text-sm font-bold uppercase active:bg-gray-200"
                                             onClick={() => {
                                                 setForm({ ...form, model: m, size: '', boltPattern: '', finish: '', offset: '' });
                                                 setSearchTerm(m);
@@ -269,7 +271,7 @@ const AddWheelModal: React.FC<AddWheelModalProps> = ({ onClose, onSaved, wheelTo
 
                 <div className="p-6 border-t bg-gray-50 flex justify-end gap-3 rounded-b-3xl">
                     <button onClick={onClose} className="px-6 py-2 text-sm font-bold text-gray-500">Cancelar</button>
-                    <button onClick={handleSave} disabled={saving} className="bg-black text-white px-10 py-3 rounded-xl font-bold flex items-center gap-2 disabled:bg-gray-300 shadow-lg">
+                    <button onClick={handleSave} disabled={saving} className="bg-black text-white px-10 py-3 rounded-xl font-bold flex items-center gap-2 disabled:bg-gray-300 shadow-lg active:scale-95 transition-transform">
                         {saving ? <Loader2 className="animate-spin w-4 h-4" /> : wheelToEdit ? "Atualizar" : "Salvar"}
                     </button>
                 </div>
