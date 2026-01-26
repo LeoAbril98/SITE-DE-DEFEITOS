@@ -4,27 +4,32 @@
 // LISTA OFICIAL DE DEFEITOS
 // =========================
 export const DEFECT_TYPES: string[] = [
-    "Amassado Interno",
     "Amassado Externo",
-    "Trinca na Borda",
-    "Trinca no Cubo",
-    "Ralado de Guia",
-    "Empeno Radial",
-    "Empeno Lateral",
-    "Oxidação",
-    "Descascamento de Verniz",
-    "Corrosão por Solupan",
-    "Furo de Fixação Ovalado",
-    "Solda Anterior Trincada",
-    "Porosidade no Alumínio",
-    "Desbalanceamento Crônico",
+    "Amassado Interno",
     "Batida de Pedra",
+    "Bicho do verniz",
+    "Corrosão por Solupan",
     "Deformação Térmica",
-    "Perda de Alinhamento",
-    "Risco no Diamantado",
+    "Desbalanceamento Crônico",
+    "Descascamento de Verniz",
     "Desgaste de Assentamento",
+    "Empeno Lateral",
+    "Empeno Radial",
+    "Furação errada",
+    "Furo de Fixação Ovalado",
     "Microfissura de Fadiga",
+    "Oxidação",
+    "Perda de Alinhamento",
+    "Porosidade no Alumínio",
+    "Ralado de Guia",
+    "Risco no Diamantado",
+    "Roda batida",
+    "Roda montada",
+    "Solda Anterior Trincada",
+    "Trinca na Borda",
+    "Trinca no Cubo"
 ];
+
 
 // =========================
 // FALLBACKS (OPCIONAL)
