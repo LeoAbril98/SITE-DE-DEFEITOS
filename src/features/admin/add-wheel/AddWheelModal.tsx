@@ -33,6 +33,24 @@ const AddWheelModal: React.FC<AddWheelModalProps> = ({ onClose, onSaved, wheelTo
 
     const { wheels, models } = useWheelCsv();
 
+    // --- FUNÇÃO AUXILIAR PARA CLOUDINARY ---
+    const uploadToCloudinary = async (file: File, resourceType: 'image' | 'video') => {
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('upload_preset', 'vqsa6bwd'); // Seu preset
+        formData.append('folder', 'wheels_app');
+
+        const response = await fetch(
+            `https://api.cloudinary.com/v1_1/deu98m3rp/${resourceType}/upload`, // Seu Cloud Name
+            { method: 'POST', body: formData }
+        );
+
+        if (!response.ok) throw new Error(`Falha no upload de ${resourceType} para Cloudinary`);
+        
+        const data = await response.json();
+        return data.secure_url; 
+    };
+
     useEffect(() => {
         function handleClickOutside(event: MouseEvent) {
             if (suggestionRef.current && !suggestionRef.current.contains(event.target as Node)) {
@@ -65,26 +83,11 @@ const AddWheelModal: React.FC<AddWheelModalProps> = ({ onClose, onSaved, wheelTo
         }
     }, [wheelToEdit]);
 
-    // FILTROS EM CASCATA
     const filteredModels = models.filter(m => m.toLowerCase().includes(searchTerm.toLowerCase()));
-    
     const arosByModel = [...new Set(wheels.filter(w => w.modelo === form.model).map(w => w.aro))];
-    
-    const furacoesByAro = [...new Set(wheels.filter(w => 
-        w.modelo === form.model && w.aro === form.size
-    ).map(w => w.furacao))];
-    
-    const acabamentosByCombo = [...new Set(wheels.filter(w => 
-        w.modelo === form.model && w.aro === form.size && w.furacao === form.boltPattern
-    ).map(w => w.acabamento))];
-
-    // BUSCA OS OFFSETS PELA COLUNA 'offset' DO CSV
-    const offsetsByCombo = [...new Set(wheels.filter(w => 
-        w.modelo === form.model && 
-        w.aro === form.size && 
-        w.furacao === form.boltPattern &&
-        w.acabamento === form.finish
-    ).map(w => w.offset))].filter(Boolean).sort((a, b) => Number(a) - Number(b));
+    const furacoesByAro = [...new Set(wheels.filter(w => w.modelo === form.model && w.aro === form.size).map(w => w.furacao))];
+    const acabamentosByCombo = [...new Set(wheels.filter(w => w.modelo === form.model && w.aro === form.size && w.furacao === form.boltPattern).map(w => w.acabamento))];
+    const offsetsByCombo = [...new Set(wheels.filter(w => w.modelo === form.model && w.aro === form.size && w.furacao === form.boltPattern && w.acabamento === form.finish).map(w => w.offset))].filter(Boolean).sort((a, b) => Number(a) - Number(b));
 
     const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>, index: number) => {
         if (e.target.files?.[0]) {
@@ -106,30 +109,27 @@ const AddWheelModal: React.FC<AddWheelModalProps> = ({ onClose, onSaved, wheelTo
     async function handleSave() {
         if (!form.model || !form.size || saving) return;
         setSaving(true);
+        
         try {
+            // 1. Upload das Fotos para Cloudinary
             const photoUrls: string[] = [];
             for (let i = 0; i < photos.length; i++) {
                 const item = photos[i];
                 if (item instanceof File) {
-                    const ext = item.name.split('.').pop();
-                    const path = `uploads/photo_${crypto.randomUUID()}.${ext}`;
-                    await supabase.storage.from('wheel-photos').upload(path, item);
-                    const { data } = supabase.storage.from('wheel-photos').getPublicUrl(path);
-                    photoUrls.push(data.publicUrl);
+                    const url = await uploadToCloudinary(item, 'image');
+                    photoUrls.push(url);
                 } else if (typeof item === 'string') {
                     photoUrls.push(item);
                 }
             }
 
+            // 2. Upload do Vídeo para Cloudinary
             let finalVideoUrl = typeof video === 'string' ? video : null;
             if (video instanceof File) {
-                const ext = video.name.split('.').pop() || 'mp4';
-                const path = `videos/vid_${crypto.randomUUID()}.${ext}`;
-                await supabase.storage.from('wheel-photos').upload(path, video);
-                const { data } = supabase.storage.from('wheel-photos').getPublicUrl(path);
-                finalVideoUrl = data.publicUrl;
+                finalVideoUrl = await uploadToCloudinary(video, 'video');
             }
 
+            // 3. Preparação dos dados para o Supabase
             const wheelData = {
                 model: form.model,
                 brand: form.brand,
@@ -143,11 +143,13 @@ const AddWheelModal: React.FC<AddWheelModalProps> = ({ onClose, onSaved, wheelTo
                 video_url: finalVideoUrl
             };
 
+            // 4. Operação no Banco de Dados
             if (wheelToEdit) {
                 await supabase.from('individual_wheels').update(wheelData).eq('id', wheelToEdit.id);
             } else {
                 await supabase.from('individual_wheels').insert([wheelData]);
             }
+
             onSaved();
             onClose();
         } catch (err: any) {
@@ -162,14 +164,13 @@ const AddWheelModal: React.FC<AddWheelModalProps> = ({ onClose, onSaved, wheelTo
     return (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-2">
             <div className="bg-white w-full max-w-2xl rounded-3xl shadow-2xl flex flex-col max-h-[95vh]">
-
+                
                 <div className="flex items-center justify-between p-5 border-b">
                     <h2 className="text-xl font-black uppercase italic">{wheelToEdit ? 'Editar Roda' : 'Nova Roda'}</h2>
                     <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full transition-colors"><X /></button>
                 </div>
 
                 <div className="p-5 space-y-6 overflow-y-auto overflow-x-visible custom-scroll">
-                    {/* Fotos e Vídeo */}
                     <div className="grid grid-cols-4 gap-3">
                         {photos.map((photo, i) => (
                             <label key={i} className="aspect-square border-2 border-dashed border-gray-200 rounded-2xl flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 overflow-hidden relative">
@@ -199,7 +200,6 @@ const AddWheelModal: React.FC<AddWheelModalProps> = ({ onClose, onSaved, wheelTo
                     </div>
 
                     <div className="space-y-4">
-                        {/* Modelo com sugestões customizadas */}
                         <div className="relative">
                             <div className="relative z-[70]">
                                 <Search className="absolute left-3 top-3.5 text-gray-400" size={16} />
@@ -230,7 +230,6 @@ const AddWheelModal: React.FC<AddWheelModalProps> = ({ onClose, onSaved, wheelTo
                             )}
                         </div>
 
-                        {/* Aro e Furação */}
                         <div className="grid grid-cols-2 gap-4">
                             <select value={form.size} disabled={!form.model} onChange={e => setForm({ ...form, size: e.target.value, boltPattern: '', finish: '', offset: '' })} className={fieldClass}>
                                 <option value="">Aro</option>
@@ -242,7 +241,6 @@ const AddWheelModal: React.FC<AddWheelModalProps> = ({ onClose, onSaved, wheelTo
                             </select>
                         </div>
 
-                        {/* Acabamento e Offset (Selects iguais) */}
                         <div className="grid grid-cols-2 gap-4">
                             <select value={form.finish} disabled={!form.boltPattern} onChange={e => setForm({ ...form, finish: e.target.value, offset: '' })} className={fieldClass}>
                                 <option value="">Acabamento</option>
