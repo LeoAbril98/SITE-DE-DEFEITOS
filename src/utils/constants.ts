@@ -19,6 +19,7 @@ export const DEFECT_TYPES: string[] = [
     "Furação errada",
     "Furo de Fixação Ovalado",
     "Microfissura de Fadiga",
+    "Obsoleta",
     "Oxidação",
     "Perda de Alinhamento",
     "Porosidade no Alumínio",
