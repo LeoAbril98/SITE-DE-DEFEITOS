@@ -9,6 +9,7 @@ export const DEFECT_TYPES: string[] = [
     "Batida de Pedra",
     "Bicho do verniz",
     "Corrosão por Solupan",
+    "Defeito na pintura",
     "Deformação Térmica",
     "Desbalanceamento Crônico",
     "Descascamento de Verniz",
