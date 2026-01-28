@@ -11,17 +11,29 @@ import { supabase } from "../lib/supabase";
 import { groupWheels } from "../features/wheels/wheelGroupAdapter";
 
 const ITEMS_PER_PAGE = 12;
+const OPTIONS_PAGE_SIZE = 1000; // para carregar opções do filtro (colunas leves)
+const ALL_PAGE_SIZE = 500; // para carregar tudo quando filtra (pode ajustar)
 
 const CatalogPage: React.FC = () => {
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
 
+  // GRID (paginado / ou completo quando filtra)
   const [rawWheels, setRawWheels] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
 
+  // Modal mobile
   const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
 
+  // Paginação do grid
   const [hasMore, setHasMore] = useState(true);
+
+  // Opções completas do filtro (não dependem do grid paginado)
+  const [filterOptions, setFilterOptions] = useState<{
+    models: string[];
+    boltPatterns: string[];
+    finishes: string[];
+  }>({ models: [], boltPatterns: [], finishes: [] });
 
   const [filters, setFilters] = useState<FilterState>({
     search: "",
@@ -35,12 +47,13 @@ const CatalogPage: React.FC = () => {
   // Infinite scroll target
   const loadMoreRef = useRef<HTMLDivElement>(null);
 
-  // Paging + lock (evita duplicar chamadas)
+  // Locks
   const pageRef = useRef(0);
   const fetchingRef = useRef(false);
 
-  // Controla transição entre "paginado" e "carregar tudo"
+  // Controle: entrou/saiu do modo filtrando
   const wasFilteringRef = useRef(false);
+  const allLoadedForFilteringRef = useRef(false);
 
   const isFiltering = Boolean(
     filters.search ||
@@ -52,12 +65,10 @@ const CatalogPage: React.FC = () => {
   );
 
   /* =========================
-     LOAD DATA (PAGINADO)
+     GRID: LOAD PAGINADO
      ========================= */
   async function loadWheels(isInitial = false) {
     if (fetchingRef.current) return;
-
-    // Se não tem mais, não tenta buscar
     if (!isInitial && !hasMore) return;
 
     fetchingRef.current = true;
@@ -67,6 +78,7 @@ const CatalogPage: React.FC = () => {
         setLoading(true);
         setHasMore(true);
         pageRef.current = 0;
+        allLoadedForFilteringRef.current = false; // voltou para paginado
       } else {
         setLoadingMore(true);
       }
@@ -89,7 +101,6 @@ const CatalogPage: React.FC = () => {
 
       setRawWheels((prev) => (isInitial ? rows : [...prev, ...rows]));
 
-      // Avança página somente se realmente carregou algo
       if (rows.length > 0) pageRef.current += 1;
 
       setHasMore(rows.length === ITEMS_PER_PAGE);
@@ -101,11 +112,55 @@ const CatalogPage: React.FC = () => {
   }
 
   /* =========================
-     LOAD DATA (CARREGA TUDO)
-     - usado quando está filtrando/buscando
+     OPÇÕES DO FILTRO: LOAD COMPLETO (LEVE)
+     - NÃO depende da paginação do grid
      ========================= */
-  async function loadAllWheels() {
+  async function loadFilterOptions() {
+    try {
+      const all: any[] = [];
+      let page = 0;
+
+      while (true) {
+        const from = page * OPTIONS_PAGE_SIZE;
+        const to = from + OPTIONS_PAGE_SIZE - 1;
+
+        const { data, error } = await supabase
+          .from("individual_wheels")
+          .select("model, bolt_pattern, finish")
+          .order("model", { ascending: true })
+          .range(from, to);
+
+        if (error) {
+          console.error("Erro ao buscar opções do filtro:", error);
+          break;
+        }
+
+        const rows = data ?? [];
+        all.push(...rows);
+
+        if (rows.length < OPTIONS_PAGE_SIZE) break;
+
+        page += 1;
+      }
+
+      const models = [...new Set(all.map((r) => r.model).filter(Boolean))].sort();
+      const boltPatterns = [
+        ...new Set(all.map((r) => r.bolt_pattern).filter(Boolean)),
+      ].sort();
+      const finishes = [...new Set(all.map((r) => r.finish).filter(Boolean))].sort();
+
+      setFilterOptions({ models, boltPatterns, finishes });
+    } catch (e) {
+      console.error("Erro inesperado ao montar opções do filtro:", e);
+    }
+  }
+
+  /* =========================
+     LOAD TUDO PARA FILTRAR/BUSCAR (UMA VEZ)
+     ========================= */
+  async function loadAllWheelsForFiltering() {
     if (fetchingRef.current) return;
+    if (allLoadedForFilteringRef.current) return; // já carregou tudo
 
     fetchingRef.current = true;
     setLoading(true);
@@ -115,8 +170,8 @@ const CatalogPage: React.FC = () => {
       let page = 0;
 
       while (true) {
-        const from = page * ITEMS_PER_PAGE;
-        const to = from + ITEMS_PER_PAGE - 1;
+        const from = page * ALL_PAGE_SIZE;
+        const to = from + ALL_PAGE_SIZE - 1;
 
         const { data, error } = await supabase
           .from("individual_wheels")
@@ -132,39 +187,40 @@ const CatalogPage: React.FC = () => {
         const rows = data ?? [];
         all.push(...rows);
 
-        // se veio menos que a página, acabou
-        if (rows.length < ITEMS_PER_PAGE) break;
-
+        if (rows.length < ALL_PAGE_SIZE) break;
         page += 1;
       }
 
       setRawWheels(all);
 
-      // Em modo "all", não faz sentido infinite scroll
+      // Em modo "all", não tem infinite scroll
       setHasMore(false);
       pageRef.current = 0;
+
+      allLoadedForFilteringRef.current = true;
     } finally {
       setLoading(false);
       fetchingRef.current = false;
     }
   }
 
-  // Carregamento inicial (paginado)
+  // Carregamento inicial
   useEffect(() => {
     loadWheels(true);
+    loadFilterOptions();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   /* =========================
      Alterna modo:
-     - entrou em filtros => carrega tudo
+     - entrou em filtros => carrega tudo para busca/filtro não ficar limitado
      - saiu dos filtros => volta paginado
      ========================= */
   useEffect(() => {
-    // entrou em modo filtro (antes não estava filtrando)
+    // entrou em modo filtro
     if (isFiltering && !wasFilteringRef.current) {
       wasFilteringRef.current = true;
-      loadAllWheels();
+      loadAllWheelsForFiltering();
       return;
     }
 
@@ -181,7 +237,7 @@ const CatalogPage: React.FC = () => {
      - pausa quando filtrando
      ========================= */
   useEffect(() => {
-    if (isFiltering) return; // pausa infinite scroll durante filtros
+    if (isFiltering) return;
 
     const el = loadMoreRef.current;
     if (!el) return;
@@ -199,7 +255,6 @@ const CatalogPage: React.FC = () => {
     );
 
     observer.observe(el);
-
     return () => observer.disconnect();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasMore, loadingMore, loading, isFiltering]);
@@ -213,21 +268,6 @@ const CatalogPage: React.FC = () => {
      LÓGICA DE FILTROS E GRUPOS
      ========================= */
   const wheelGroups = useMemo(() => groupWheels(rawWheels), [rawWheels]);
-
-  const availableModels = useMemo(
-    () => [...new Set(wheelGroups.map((g) => g.model))].sort(),
-    [wheelGroups]
-  );
-
-  const availableBoltPatterns = useMemo(
-    () => [...new Set(wheelGroups.map((g) => g.boltPattern))].sort(),
-    [wheelGroups]
-  );
-
-  const availableFinishes = useMemo(
-    () => [...new Set(wheelGroups.map((g) => g.finish))].sort(),
-    [wheelGroups]
-  );
 
   const filteredGroups = useMemo(() => {
     const search = filters.search.trim().toLowerCase();
@@ -295,14 +335,14 @@ const CatalogPage: React.FC = () => {
                 filters={filters}
                 setFilters={setFilters}
                 onReset={resetFilters}
-                models={availableModels}
-                boltPatterns={availableBoltPatterns}
-                finishes={availableFinishes}
+                models={filterOptions.models}
+                boltPatterns={filterOptions.boltPatterns}
+                finishes={filterOptions.finishes}
               />
             </aside>
 
             <div className="flex-grow">
-              {/* CAMPO DE BUSCA */}
+              {/* BUSCA */}
               <div className="flex flex-col sm:flex-row gap-4 mb-8">
                 <div className="relative flex-grow">
                   <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
@@ -333,7 +373,7 @@ const CatalogPage: React.FC = () => {
                 </div>
               )}
 
-              {/* ESTADO DE CARREGAMENTO INICIAL (SKELETON) */}
+              {/* LOADING */}
               {loading ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                   {[...Array(8)].map((_, i) => (
@@ -371,7 +411,6 @@ const CatalogPage: React.FC = () => {
 
                   {/* TRIGGER DO INFINITE SCROLL */}
                   <div ref={loadMoreRef} className="py-12 flex justify-center">
-                    {/* Quando está filtrando, não carrega mais */}
                     {isFiltering ? (
                       <p className="text-[10px] font-black uppercase tracking-widest text-gray-300">
                         Infinite scroll pausado durante filtros
@@ -396,7 +435,7 @@ const CatalogPage: React.FC = () => {
                     )}
                   </div>
 
-                  {/* BOTÃO "CARREGAR MAIS" opcional */}
+                  {/* BOTÃO "CARREGAR MAIS" */}
                   {!isFiltering && hasMore && !loadingMore && (
                     <div className="flex justify-center pb-8">
                       <button
@@ -432,9 +471,9 @@ const CatalogPage: React.FC = () => {
               filters={filters}
               setFilters={setFilters}
               onReset={resetFilters}
-              models={availableModels}
-              boltPatterns={availableBoltPatterns}
-              finishes={availableFinishes}
+              models={filterOptions.models}
+              boltPatterns={filterOptions.boltPatterns}
+              finishes={filterOptions.finishes}
             />
           </div>
 
