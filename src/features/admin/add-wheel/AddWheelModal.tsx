@@ -46,9 +46,9 @@ const AddWheelModal: React.FC<AddWheelModalProps> = ({ onClose, onSaved, wheelTo
         );
 
         if (!response.ok) throw new Error(`Falha no upload de ${resourceType} para Cloudinary`);
-        
+
         const data = await response.json();
-        return data.secure_url; 
+        return data.secure_url;
     };
 
     useEffect(() => {
@@ -109,7 +109,7 @@ const AddWheelModal: React.FC<AddWheelModalProps> = ({ onClose, onSaved, wheelTo
     async function handleSave() {
         if (!form.model || !form.size || saving) return;
         setSaving(true);
-        
+
         try {
             // 1. Upload das Fotos para Cloudinary
             const photoUrls: string[] = [];
@@ -164,7 +164,7 @@ const AddWheelModal: React.FC<AddWheelModalProps> = ({ onClose, onSaved, wheelTo
     return (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-2">
             <div className="bg-white w-full max-w-2xl rounded-3xl shadow-2xl flex flex-col max-h-[95vh]">
-                
+
                 <div className="flex items-center justify-between p-5 border-b">
                     <h2 className="text-xl font-black uppercase italic">{wheelToEdit ? 'Editar Roda' : 'Nova Roda'}</h2>
                     <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full transition-colors"><X /></button>
@@ -247,10 +247,10 @@ const AddWheelModal: React.FC<AddWheelModalProps> = ({ onClose, onSaved, wheelTo
                                 {acabamentosByCombo.map(a => <option key={a} value={a}>{a}</option>)}
                             </select>
 
-                            <select 
-                                value={form.offset} 
-                                disabled={!form.finish} 
-                                onChange={e => setForm({ ...form, offset: e.target.value })} 
+                            <select
+                                value={form.offset}
+                                disabled={!form.finish}
+                                onChange={e => setForm({ ...form, offset: e.target.value })}
                                 className={fieldClass}
                             >
                                 <option value="">ET (Offset)</option>
@@ -268,9 +268,9 @@ const AddWheelModal: React.FC<AddWheelModalProps> = ({ onClose, onSaved, wheelTo
                         />
                     </div>
 
-                    <DefectTags 
-                        selected={form.defects} 
-                        onToggle={(d) => setForm(f => ({ ...f, defects: f.defects.includes(d) ? f.defects.filter(x => x !== d) : [...f.defects, d] }))} 
+                    <DefectTags
+                        selected={form.defects}
+                        onToggle={(d) => setForm(f => ({ ...f, defects: f.defects.includes(d) ? f.defects.filter(x => x !== d) : [...f.defects, d] }))}
                     />
                 </div>
 

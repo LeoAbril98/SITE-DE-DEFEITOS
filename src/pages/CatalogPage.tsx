@@ -110,7 +110,7 @@ const CatalogPage: React.FC = () => {
 
     const filteredGroups = useMemo(() => {
         return wheelGroups.filter((group) => {
-            const matchesSearch = !filters.search || 
+            const matchesSearch = !filters.search ||
                 group.model.toLowerCase().includes(filters.search.toLowerCase()) ||
                 group.finish.toLowerCase().includes(filters.search.toLowerCase());
             const matchesModel = !filters.model || group.model === filters.model;
@@ -138,9 +138,9 @@ const CatalogPage: React.FC = () => {
                     <WheelDetail group={selectedGroup} onBack={() => setSelectedGroupId(null)} />
                 ) : (
                     <div className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-8 flex flex-col md:flex-row gap-8">
-                        
+
                         <aside className="hidden lg:block w-64 shrink-0">
-                            <FilterSidebar 
+                            <FilterSidebar
                                 filters={filters} setFilters={setFilters} onReset={resetFilters}
                                 models={availableModels} boltPatterns={availableBoltPatterns} finishes={availableFinishes}
                             />
@@ -176,10 +176,10 @@ const CatalogPage: React.FC = () => {
                                     {filteredGroups.length > 0 ? (
                                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                                             {filteredGroups.map((group) => (
-                                                <WheelCard 
-                                                    key={group.id} 
-                                                    group={group} 
-                                                    onClick={() => setSelectedGroupId(group.id)} 
+                                                <WheelCard
+                                                    key={group.id}
+                                                    group={group}
+                                                    onClick={() => setSelectedGroupId(group.id)}
                                                 />
                                             ))}
                                         </div>

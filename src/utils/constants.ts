@@ -29,9 +29,8 @@ export const DEFECT_TYPES: string[] = [
     "Roda montada",
     "Solda Anterior Trincada",
     "Trinca na Borda",
-    "Trinca no Cubo"
+    "Trinca no Cubo",
 ];
-
 
 // =========================
 // FALLBACKS (OPCIONAL)

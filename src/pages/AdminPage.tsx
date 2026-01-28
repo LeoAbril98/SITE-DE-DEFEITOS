@@ -85,7 +85,7 @@ const AdminPage: React.FC = () => {
                 <div className="flex flex-1 max-w-md gap-4">
                     <div className="relative flex-1">
                         <span className="absolute left-4 top-1/2 -translate-y-1/2 opacity-30">🔍</span>
-                        <input 
+                        <input
                             type="text"
                             placeholder="Buscar modelo..."
                             className="w-full pl-10 pr-4 py-3 bg-white border-2 border-gray-100 rounded-2xl focus:border-black outline-none transition-all font-bold uppercase text-sm"
@@ -200,14 +200,14 @@ const AdminPage: React.FC = () => {
                             <div className="flex items-center gap-2">
                                 <button
                                     disabled={currentPage === 1}
-                                    onClick={() => { setCurrentPage(1); window.scrollTo(0,0); }}
+                                    onClick={() => { setCurrentPage(1); window.scrollTo(0, 0); }}
                                     className="px-3 py-2 text-xs font-black uppercase disabled:opacity-20"
                                 >
                                     Primeira
                                 </button>
                                 <button
                                     disabled={currentPage === 1}
-                                    onClick={() => { setCurrentPage(prev => prev - 1); window.scrollTo(0,0); }}
+                                    onClick={() => { setCurrentPage(prev => prev - 1); window.scrollTo(0, 0); }}
                                     className="w-12 h-12 bg-white border-2 border-gray-100 rounded-xl font-black hover:border-black transition-all disabled:opacity-20"
                                 >
                                     ←
@@ -217,14 +217,14 @@ const AdminPage: React.FC = () => {
                                 </div>
                                 <button
                                     disabled={currentPage >= totalPages}
-                                    onClick={() => { setCurrentPage(prev => prev + 1); window.scrollTo(0,0); }}
+                                    onClick={() => { setCurrentPage(prev => prev + 1); window.scrollTo(0, 0); }}
                                     className="w-12 h-12 bg-white border-2 border-gray-100 rounded-xl font-black hover:border-black transition-all disabled:opacity-20"
                                 >
                                     →
                                 </button>
                                 <button
                                     disabled={currentPage >= totalPages}
-                                    onClick={() => { setCurrentPage(totalPages); window.scrollTo(0,0); }}
+                                    onClick={() => { setCurrentPage(totalPages); window.scrollTo(0, 0); }}
                                     className="px-3 py-2 text-xs font-black uppercase disabled:opacity-20"
                                 >
                                     Última
