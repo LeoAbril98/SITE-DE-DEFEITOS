@@ -60,10 +60,17 @@ const WheelDetail: React.FC<WheelDetailProps> = ({ group, onBack }) => {
      ============================================================ */
   const handleShareImages = async (item: IndividualWheel, index: number) => {
     const message =
-      `*DETALHES*\n` +
-      `*Roda:* ${group.model}\n` +
+      `*RELATÓRIO TÉCNICO – RODAS*\n\n` +
+      `*Modelo:* ${group.model}\n` +
+      (group.brand ? `*Marca:* ${group.brand}\n` : "") +
       `*Unidade:* #${index + 1}\n` +
-      `*Aro:* ${group.size}`;
+      `*Aro:* ${group.size}\n` +
+      `*Furação:* ${group.boltPattern}\n` +
+      (item.wheel_offset ? `*ET:* ${item.wheel_offset}\n` : "") +
+      `*Acabamento:* ${group.finish}\n\n` +
+      `*Mídias anexas:*\n` +
+      `– Fotos da inspeção\n` +
+      (item.video_url ? `– Vídeo da inspeção\n` : "");
 
     try {
       const filesArray: File[] = [];
@@ -372,8 +379,8 @@ const IndividualWheelCard: React.FC<{
               key={i}
               onClick={() => changeMedia(i)}
               className={`min-w-[110px] h-[110px] rounded-[1.5rem] overflow-hidden border-4 transition-all relative active:scale-95 ${activeIndex === i
-                  ? "border-blue-600 scale-105 shadow-md opacity-100"
-                  : "border-white opacity-40 hover:opacity-70 hover:scale-[1.02]"
+                ? "border-blue-600 scale-105 shadow-md opacity-100"
+                : "border-white opacity-40 hover:opacity-70 hover:scale-[1.02]"
                 }`}
               aria-label={`Abrir mídia ${i + 1}`}
             >
