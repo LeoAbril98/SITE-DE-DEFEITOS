@@ -33,9 +33,7 @@ const AddWheelModal: React.FC<AddWheelModalProps> = ({ onClose, onSaved, wheelTo
 
     const { wheels, models } = useWheelCsv();
 
-    /* ============================================================
-       COMPRESSÃO DE IMAGEM (Economiza sua cota de dados)
-       ============================================================ */
+    // --- AUXILIAR: COMPRESSÃO DE IMAGEM (Reduz 5MB para ~200KB) ---
     const compressImage = (file: File): Promise<Blob> => {
         return new Promise((resolve, reject) => {
             const reader = new FileReader();
@@ -69,7 +67,6 @@ const AddWheelModal: React.FC<AddWheelModalProps> = ({ onClose, onSaved, wheelTo
                         ctx.imageSmoothingQuality = 'high';
                         ctx.drawImage(img, 0, 0, width, height);
                     }
-                    
                     canvas.toBlob((blob) => {
                         if (blob) resolve(blob);
                         else reject(new Error('Falha na compressão'));
@@ -80,6 +77,7 @@ const AddWheelModal: React.FC<AddWheelModalProps> = ({ onClose, onSaved, wheelTo
         });
     };
 
+    // --- AUXILIAR: UPLOAD CLOUDINARY ---
     const uploadToCloudinary = async (file: File | Blob, resourceType: 'image' | 'video') => {
         const formData = new FormData();
         formData.append('file', file);
@@ -96,9 +94,7 @@ const AddWheelModal: React.FC<AddWheelModalProps> = ({ onClose, onSaved, wheelTo
         return data.secure_url;
     };
 
-    /* ============================================================
-       LÓGICA DE SALVAMENTO COMPLETA
-       ============================================================ */
+    // --- LÓGICA DE SALVAMENTO ---
     async function handleSave() {
         if (!form.model || !form.size || saving) return;
         setSaving(true);
@@ -126,7 +122,7 @@ const AddWheelModal: React.FC<AddWheelModalProps> = ({ onClose, onSaved, wheelTo
                 size: form.size,
                 bolt_pattern: form.boltPattern,
                 finish: form.finish,
-                wheel_offset: Number(form.offset), // Campo Offset incluído
+                wheel_offset: Number(form.offset),
                 description: form.description,
                 defects: form.defects,
                 photos: photoUrls,
@@ -148,7 +144,24 @@ const AddWheelModal: React.FC<AddWheelModalProps> = ({ onClose, onSaved, wheelTo
         }
     }
 
-    // Carregamento de dados para edição
+    // Handlers para Mídia
+    const handleVideoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files?.[0]) {
+            const file = e.target.files[0];
+            const maxSize = 25 * 1024 * 1024; // Limite de 25MB para segurança
+
+            if (file.size > maxSize) {
+                alert("Vídeo muito grande! Grave em 720p ou diminua o tempo para economizar dados.");
+                e.target.value = "";
+                return;
+            }
+
+            setVideo(file);
+            setVideoPreview(URL.createObjectURL(file));
+        }
+    };
+
+    // Efeito para carregar dados em edição
     useEffect(() => {
         if (wheelToEdit) {
             setForm({
@@ -168,7 +181,7 @@ const AddWheelModal: React.FC<AddWheelModalProps> = ({ onClose, onSaved, wheelTo
         }
     }, [wheelToEdit]);
 
-    // Filtragem de sugestões (CSV)
+    // Filtragem dinâmica via CSV
     const filteredModels = models.filter(m => m.toLowerCase().includes(searchTerm.toLowerCase()));
     const arosByModel = [...new Set(wheels.filter(w => w.modelo === form.model).map(w => w.aro))];
     const furacoesByAro = [...new Set(wheels.filter(w => w.modelo === form.model && w.aro === form.size).map(w => w.furacao))];
@@ -183,11 +196,11 @@ const AddWheelModal: React.FC<AddWheelModalProps> = ({ onClose, onSaved, wheelTo
                 
                 <div className="flex items-center justify-between p-5 border-b">
                     <h2 className="text-xl font-black uppercase italic">{wheelToEdit ? 'Editar Roda' : 'Nova Roda'}</h2>
-                    <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full"><X /></button>
+                    <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full transition-colors"><X /></button>
                 </div>
 
                 <div className="p-5 space-y-6 overflow-y-auto custom-scroll">
-                    {/* SELEÇÃO DE MÍDIA */}
+                    {/* SELEÇÃO DE FOTOS E VÍDEO */}
                     <div className="grid grid-cols-4 gap-3">
                         {photos.map((photo, i) => (
                             <label key={i} className="aspect-square border-2 border-dashed border-gray-200 rounded-2xl flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 overflow-hidden relative">
@@ -203,17 +216,12 @@ const AddWheelModal: React.FC<AddWheelModalProps> = ({ onClose, onSaved, wheelTo
                         ))}
                         <label className="aspect-square border-2 border-dashed border-blue-200 bg-blue-50/30 rounded-2xl flex flex-col items-center justify-center cursor-pointer overflow-hidden relative">
                             {videoPreview ? <video src={videoPreview} className="w-full h-full object-cover" /> : <Video className="text-blue-400" />}
-                            <input type="file" accept="video/*" className="hidden" onChange={(e) => {
-                                if (e.target.files?.[0]) {
-                                    setVideo(e.target.files[0]);
-                                    setVideoPreview(URL.createObjectURL(e.target.files[0]));
-                                }
-                            }} />
+                            <input type="file" accept="video/*" className="hidden" onChange={handleVideoChange} />
                         </label>
                     </div>
 
-                    {/* CAMPOS DO FORMULÁRIO */}
                     <div className="space-y-4">
+                        {/* BUSCA DE MODELO */}
                         <div className="relative">
                             <Search className="absolute left-3 top-3.5 text-gray-400" size={16} />
                             <input
@@ -233,6 +241,7 @@ const AddWheelModal: React.FC<AddWheelModalProps> = ({ onClose, onSaved, wheelTo
                             )}
                         </div>
 
+                        {/* SELECTS DINÂMICOS */}
                         <div className="grid grid-cols-2 gap-4">
                             <select value={form.size} disabled={!form.model} onChange={e => setForm({ ...form, size: e.target.value })} className={fieldClass}>
                                 <option value="">Aro</option>
