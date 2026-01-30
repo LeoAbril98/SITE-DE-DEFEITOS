@@ -13,17 +13,11 @@ interface AddWheelModalProps {
 
 const AddWheelModal: React.FC<AddWheelModalProps> = ({ onClose, onSaved, wheelToEdit }) => {
     const [form, setForm] = useState({
-        model: '',
-        brand: '',
-        size: '',
-        boltPattern: '',
-        finish: '',
-        offset: '',
-        description: '',
-        defects: [] as string[],
+        model: '', brand: '', size: '', boltPattern: '', finish: '', offset: '', description: '', defects: [] as string[],
     });
 
     const [saving, setSaving] = useState(false);
+    const [uploadProgress, setUploadProgress] = useState(0); 
     const [photos, setPhotos] = useState<(File | string | null)[]>([null, null, null]);
     const [video, setVideo] = useState<File | string | null>(null);
     const [videoPreview, setVideoPreview] = useState<string | null>(null);
@@ -33,7 +27,7 @@ const AddWheelModal: React.FC<AddWheelModalProps> = ({ onClose, onSaved, wheelTo
 
     const { wheels, models } = useWheelCsv();
 
-    // --- AUXILIAR: COMPRESSÃO DE IMAGEM (Reduz 5MB para ~200KB) ---
+    // --- COMPRESSÃO DE IMAGEM: Reduz arquivos de ~5MB para ~200KB ---
     const compressImage = (file: File): Promise<Blob> => {
         return new Promise((resolve, reject) => {
             const reader = new FileReader();
@@ -43,72 +37,62 @@ const AddWheelModal: React.FC<AddWheelModalProps> = ({ onClose, onSaved, wheelTo
                 img.src = event.target?.result as string;
                 img.onload = () => {
                     const canvas = document.createElement('canvas');
-                    const MAX_WIDTH = 1200; 
-                    const MAX_HEIGHT = 1200;
-                    let width = img.width;
-                    let height = img.height;
-
-                    if (width > height) {
-                        if (width > MAX_WIDTH) {
-                            height *= MAX_WIDTH / width;
-                            width = MAX_WIDTH;
-                        }
-                    } else {
-                        if (height > MAX_HEIGHT) {
-                            width *= MAX_HEIGHT / height;
-                            height = MAX_HEIGHT;
-                        }
-                    }
-
-                    canvas.width = width;
-                    canvas.height = height;
+                    const MAX_WIDTH = 1200;
+                    const scale = Math.min(MAX_WIDTH / img.width, 1);
+                    canvas.width = img.width * scale;
+                    canvas.height = img.height * scale;
                     const ctx = canvas.getContext('2d');
                     if (ctx) {
                         ctx.imageSmoothingQuality = 'high';
-                        ctx.drawImage(img, 0, 0, width, height);
+                        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
                     }
-                    canvas.toBlob((blob) => {
-                        if (blob) resolve(blob);
-                        else reject(new Error('Falha na compressão'));
-                    }, 'image/jpeg', 0.8);
+                    canvas.toBlob((blob) => blob ? resolve(blob) : reject(), 'image/jpeg', 0.8);
                 };
             };
-            reader.onerror = (error) => reject(error);
+            reader.onerror = reject;
         });
     };
 
-    // --- AUXILIAR: UPLOAD CLOUDINARY ---
-    const uploadToCloudinary = async (file: File | Blob, resourceType: 'image' | 'video') => {
-        const formData = new FormData();
-        formData.append('file', file);
-        formData.append('upload_preset', 'vqsa6bwd'); 
-        formData.append('folder', 'wheels_app');
+    // --- UPLOAD COM MONITORAMENTO DE PROGRESSO (XHR) ---
+    const uploadToCloudinary = (file: File | Blob, resourceType: 'image' | 'video'): Promise<string> => {
+        return new Promise((resolve, reject) => {
+            const xhr = new XMLHttpRequest();
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('upload_preset', 'vqsa6bwd');
+            formData.append('folder', 'wheels_app');
 
-        const response = await fetch(
-            `https://api.cloudinary.com/v1_1/deu98m3rp/${resourceType}/upload`,
-            { method: 'POST', body: formData }
-        );
+            xhr.open('POST', `https://api.cloudinary.com/v1_1/deu98m3rp/${resourceType}/upload`);
 
-        if (!response.ok) throw new Error(`Falha no upload de ${resourceType}`);
-        const data = await response.json();
-        return data.secure_url;
+            xhr.upload.onprogress = (event) => {
+                if (event.lengthComputable) {
+                    const percent = Math.round((event.loaded / event.total) * 100);
+                    setUploadProgress(percent);
+                }
+            };
+
+            xhr.onload = () => {
+                if (xhr.status === 200) resolve(JSON.parse(xhr.responseText).secure_url);
+                else reject(new Error('Falha no upload'));
+            };
+
+            xhr.onerror = () => reject(new Error('Erro de conexão'));
+            xhr.send(formData);
+        });
     };
 
-    // --- LÓGICA DE SALVAMENTO ---
     async function handleSave() {
         if (!form.model || !form.size || saving) return;
         setSaving(true);
+        setUploadProgress(0);
 
         try {
             const photoUrls: string[] = [];
             for (const item of photos) {
                 if (item instanceof File) {
                     const compressed = await compressImage(item);
-                    const url = await uploadToCloudinary(compressed, 'image');
-                    photoUrls.push(url);
-                } else if (typeof item === 'string') {
-                    photoUrls.push(item);
-                }
+                    photoUrls.push(await uploadToCloudinary(compressed, 'image'));
+                } else if (typeof item === 'string') photoUrls.push(item);
             }
 
             let finalVideoUrl = typeof video === 'string' ? video : null;
@@ -117,62 +101,32 @@ const AddWheelModal: React.FC<AddWheelModalProps> = ({ onClose, onSaved, wheelTo
             }
 
             const wheelData = {
-                model: form.model,
-                brand: form.brand,
-                size: form.size,
-                bolt_pattern: form.boltPattern,
-                finish: form.finish,
-                wheel_offset: Number(form.offset),
-                description: form.description,
-                defects: form.defects,
-                photos: photoUrls,
-                video_url: finalVideoUrl
+                model: form.model, brand: form.brand, size: form.size, bolt_pattern: form.boltPattern,
+                finish: form.finish, wheel_offset: Number(form.offset), description: form.description,
+                defects: form.defects, photos: photoUrls, video_url: finalVideoUrl
             };
 
-            if (wheelToEdit) {
-                await supabase.from('individual_wheels').update(wheelData).eq('id', wheelToEdit.id);
-            } else {
-                await supabase.from('individual_wheels').insert([wheelData]);
-            }
+            if (wheelToEdit) await supabase.from('individual_wheels').update(wheelData).eq('id', wheelToEdit.id);
+            else await supabase.from('individual_wheels').insert([wheelData]);
 
             onSaved();
             onClose();
         } catch (err: any) {
-            alert("Erro ao salvar: " + err.message);
+            alert("Erro: " + err.message);
         } finally {
             setSaving(false);
+            setUploadProgress(0);
         }
     }
 
-    // Handlers para Mídia
-    const handleVideoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (e.target.files?.[0]) {
-            const file = e.target.files[0];
-            const maxSize = 25 * 1024 * 1024; // Limite de 25MB para segurança
-
-            if (file.size > maxSize) {
-                alert("Vídeo muito grande! Grave em 720p ou diminua o tempo para economizar dados.");
-                e.target.value = "";
-                return;
-            }
-
-            setVideo(file);
-            setVideoPreview(URL.createObjectURL(file));
-        }
-    };
-
-    // Efeito para carregar dados em edição
+    // Handlers e Effects para busca e edição
     useEffect(() => {
         if (wheelToEdit) {
             setForm({
-                model: wheelToEdit.model,
-                brand: wheelToEdit.brand || '',
-                size: wheelToEdit.size,
-                boltPattern: wheelToEdit.bolt_pattern,
-                finish: wheelToEdit.finish,
+                model: wheelToEdit.model, brand: wheelToEdit.brand || '', size: wheelToEdit.size,
+                boltPattern: wheelToEdit.bolt_pattern, finish: wheelToEdit.finish,
                 offset: wheelToEdit.wheel_offset?.toString() || '',
-                description: wheelToEdit.description || '',
-                defects: wheelToEdit.defects || [],
+                description: wheelToEdit.description || '', defects: wheelToEdit.defects || [],
             });
             setSearchTerm(wheelToEdit.model);
             const p = wheelToEdit.photos || [];
@@ -181,7 +135,6 @@ const AddWheelModal: React.FC<AddWheelModalProps> = ({ onClose, onSaved, wheelTo
         }
     }, [wheelToEdit]);
 
-    // Filtragem dinâmica via CSV
     const filteredModels = models.filter(m => m.toLowerCase().includes(searchTerm.toLowerCase()));
     const arosByModel = [...new Set(wheels.filter(w => w.modelo === form.model).map(w => w.aro))];
     const furacoesByAro = [...new Set(wheels.filter(w => w.modelo === form.model && w.aro === form.size).map(w => w.furacao))];
@@ -200,7 +153,7 @@ const AddWheelModal: React.FC<AddWheelModalProps> = ({ onClose, onSaved, wheelTo
                 </div>
 
                 <div className="p-5 space-y-6 overflow-y-auto custom-scroll">
-                    {/* SELEÇÃO DE FOTOS E VÍDEO */}
+                    {/* SELEÇÃO DE MÍDIA */}
                     <div className="grid grid-cols-4 gap-3">
                         {photos.map((photo, i) => (
                             <label key={i} className="aspect-square border-2 border-dashed border-gray-200 rounded-2xl flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 overflow-hidden relative">
@@ -216,12 +169,18 @@ const AddWheelModal: React.FC<AddWheelModalProps> = ({ onClose, onSaved, wheelTo
                         ))}
                         <label className="aspect-square border-2 border-dashed border-blue-200 bg-blue-50/30 rounded-2xl flex flex-col items-center justify-center cursor-pointer overflow-hidden relative">
                             {videoPreview ? <video src={videoPreview} className="w-full h-full object-cover" /> : <Video className="text-blue-400" />}
-                            <input type="file" accept="video/*" className="hidden" onChange={handleVideoChange} />
+                            <input type="file" accept="video/*" className="hidden" onChange={(e) => {
+                                if (e.target.files?.[0]) {
+                                    if (e.target.files[0].size > 25 * 1024 * 1024) return alert("Vídeo muito grande (máx 25MB)");
+                                    setVideo(e.target.files[0]);
+                                    setVideoPreview(URL.createObjectURL(e.target.files[0]));
+                                }
+                            }} />
                         </label>
                     </div>
 
+                    {/* CAMPOS TÉCNICOS */}
                     <div className="space-y-4">
-                        {/* BUSCA DE MODELO */}
                         <div className="relative">
                             <Search className="absolute left-3 top-3.5 text-gray-400" size={16} />
                             <input
@@ -241,7 +200,6 @@ const AddWheelModal: React.FC<AddWheelModalProps> = ({ onClose, onSaved, wheelTo
                             )}
                         </div>
 
-                        {/* SELECTS DINÂMICOS */}
                         <div className="grid grid-cols-2 gap-4">
                             <select value={form.size} disabled={!form.model} onChange={e => setForm({ ...form, size: e.target.value })} className={fieldClass}>
                                 <option value="">Aro</option>
@@ -273,11 +231,32 @@ const AddWheelModal: React.FC<AddWheelModalProps> = ({ onClose, onSaved, wheelTo
                     <DefectTags selected={form.defects} onToggle={(d) => setForm(f => ({ ...f, defects: f.defects.includes(d) ? f.defects.filter(x => x !== d) : [...f.defects, d] }))} />
                 </div>
 
-                <div className="p-6 border-t bg-gray-50 flex justify-end gap-3 rounded-b-3xl">
-                    <button onClick={onClose} className="px-6 py-2 text-sm font-bold text-gray-500">Cancelar</button>
-                    <button onClick={handleSave} disabled={saving} className="bg-black text-white px-10 py-3 rounded-xl font-bold flex items-center gap-2 shadow-lg disabled:bg-gray-300">
-                        {saving ? <Loader2 className="animate-spin" size={16} /> : "Salvar"}
-                    </button>
+                {/* RODAPÉ COM BARRA DE PROGRESSO */}
+                <div className="p-6 border-t bg-gray-50 rounded-b-3xl">
+                    {saving && (
+                        <div className="mb-4">
+                            <div className="flex justify-between text-[10px] font-black uppercase tracking-widest mb-1 text-blue-600">
+                                <span>Enviando arquivos...</span>
+                                <span>{uploadProgress}%</span>
+                            </div>
+                            <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
+                                <div 
+                                    className="h-full bg-blue-600 transition-all duration-300 shadow-[0_0_8px_rgba(37,99,235,0.5)]" 
+                                    style={{ width: `${uploadProgress}%` }}
+                                />
+                            </div>
+                        </div>
+                    )}
+                    <div className="flex justify-end gap-3">
+                        <button onClick={onClose} className="px-6 py-2 text-sm font-bold text-gray-500">Cancelar</button>
+                        <button 
+                            onClick={handleSave} 
+                            disabled={saving} 
+                            className="bg-black text-white px-10 py-3 rounded-xl font-bold flex items-center gap-2 shadow-lg disabled:bg-gray-300 min-w-[140px] justify-center"
+                        >
+                            {saving ? <Loader2 className="animate-spin" size={16} /> : "Salvar"}
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
