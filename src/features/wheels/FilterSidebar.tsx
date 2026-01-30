@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo } from 'react';
 import { FilterState } from '../../types/wheel';
 import { DEFECT_TYPES, SIZES } from '../../utils/constants';
 import { RotateCcw } from 'lucide-react';
@@ -7,7 +7,6 @@ interface FilterSidebarProps {
   filters: FilterState;
   setFilters: React.Dispatch<React.SetStateAction<FilterState>>;
   onReset: () => void;
-
   models: string[];
   boltPatterns: string[];
   finishes: string[];
@@ -21,17 +20,13 @@ const FilterSidebar: React.FC<FilterSidebarProps> = ({
   boltPatterns,
   finishes,
 }) => {
+  // Função para atualizar filtros sem disparar renders desnecessários
   const updateFilter = (key: keyof FilterState, value: string) => {
+    if (filters[key] === value) return; // Evita requisição se o valor for o mesmo
     setFilters(prev => ({ ...prev, [key]: value }));
   };
 
-  const Section = ({
-    title,
-    children,
-  }: {
-    title: string;
-    children?: React.ReactNode;
-  }) => (
+  const Section = ({ title, children }: { title: string; children?: React.ReactNode }) => (
     <div className="mb-8 last:mb-0">
       <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">
         {title}
@@ -42,115 +37,93 @@ const FilterSidebar: React.FC<FilterSidebarProps> = ({
 
   return (
     <div className="bg-white lg:bg-transparent p-0">
-      {/* MOBILE HEADER */}
       <div className="flex items-center justify-between mb-6 lg:hidden">
         <h2 className="text-lg font-bold">Filtros</h2>
-        <button
-          onClick={onReset}
-          className="text-sm text-gray-400 hover:text-black flex items-center gap-1"
-        >
+        <button onClick={onReset} className="text-sm text-gray-400 hover:text-black flex items-center gap-1">
           <RotateCcw className="w-3 h-3" /> Limpar
         </button>
       </div>
 
-      {/* MODELO */}
       <Section title="Modelo">
         <select
-          className="w-full bg-white border border-gray-200 rounded-lg p-2.5 text-sm"
+          className="w-full bg-white border border-gray-200 rounded-lg p-2.5 text-sm outline-none focus:border-black"
           value={filters.model}
           onChange={(e) => updateFilter('model', e.target.value)}
         >
-          <option value="">Todos</option>
+          <option value="">Todos os modelos</option>
           {models.map(model => (
-            <option key={model} value={model}>
-              {model}
-            </option>
+            <option key={model} value={model}>{model}</option>
           ))}
         </select>
       </Section>
 
-      {/* ARO */}
       <Section title="Aro">
         <div className="flex flex-wrap gap-2">
-          {SIZES.map(size => (
-            <button
-              key={size}
-              onClick={() =>
-                // Aqui enviamos o 'size' completo (ex: "Aro 15") para o estado
-                updateFilter('size', filters.size === size ? '' : size)
-              }
-              className={`px-3 py-1.5 text-xs rounded-md border ${filters.size === size
-                  ? 'bg-black text-white border-black'
-                  : 'border-gray-200 text-gray-600'
+          {SIZES.map(size => {
+            const isActive = filters.size === size;
+            return (
+              <button
+                key={size}
+                onClick={() => updateFilter('size', isActive ? '' : size)}
+                className={`px-3 py-1.5 text-xs rounded-md border transition-colors ${
+                  isActive ? 'bg-black text-white border-black' : 'border-gray-200 text-gray-600 hover:border-gray-400'
                 }`}
-            >
-              {/* Aqui limpamos apenas o que o usuário vê: "Aro 15" vira "15" */}
-              {size.replace(/[^\d]/g, '')}"
-            </button>
-          ))}
+              >
+                {size.replace(/[^\d]/g, '')}"
+              </button>
+            );
+          })}
         </div>
       </Section>
 
-      {/* FURAÇÃO */}
       <Section title="Furação">
         <select
-          className="w-full bg-white border border-gray-200 rounded-lg p-2.5 text-sm"
+          className="w-full bg-white border border-gray-200 rounded-lg p-2.5 text-sm outline-none focus:border-black"
           value={filters.boltPattern}
           onChange={(e) => updateFilter('boltPattern', e.target.value)}
         >
-          <option value="">Todas</option>
+          <option value="">Todas as furações</option>
           {boltPatterns.map(bp => (
-            <option key={bp} value={bp}>
-              {bp}
-            </option>
+            <option key={bp} value={bp}>{bp}</option>
           ))}
         </select>
       </Section>
 
-      {/* ACABAMENTO */}
       <Section title="Acabamento">
         <select
-          className="w-full bg-white border border-gray-200 rounded-lg p-2.5 text-sm"
+          className="w-full bg-white border border-gray-200 rounded-lg p-2.5 text-sm outline-none focus:border-black"
           value={filters.finish}
           onChange={(e) => updateFilter('finish', e.target.value)}
         >
-          <option value="">Todos</option>
+          <option value="">Todos os acabamentos</option>
           {finishes.map(f => (
-            <option key={f} value={f}>
-              {f}
-            </option>
+            <option key={f} value={f}>{f}</option>
           ))}
         </select>
       </Section>
 
-      {/* DEFEITOS */}
       <Section title="Defeitos">
-        <div className="space-y-1 max-h-64 overflow-y-auto pr-2">
-          {DEFECT_TYPES.map(type => (
-            <label
-              key={type}
-              className="flex items-center gap-3 py-1 px-2 cursor-pointer"
-            >
-              <input
-                type="checkbox"
-                checked={filters.defectType === type}
-                onChange={() =>
-                  updateFilter(
-                    'defectType',
-                    filters.defectType === type ? '' : type
-                  )
-                }
-              />
-              <span className="text-sm text-gray-600">{type}</span>
-            </label>
-          ))}
+        <div className="space-y-1 max-h-64 overflow-y-auto pr-2 custom-scroll">
+          {DEFECT_TYPES.map(type => {
+            const isChecked = filters.defectType === type;
+            return (
+              <label key={type} className="flex items-center gap-3 py-1.5 px-2 cursor-pointer hover:bg-gray-50 rounded-md transition-colors">
+                <input
+                  type="checkbox"
+                  className="w-4 h-4 accent-black"
+                  checked={isChecked}
+                  onChange={() => updateFilter('defectType', isChecked ? '' : type)}
+                />
+                <span className={`text-sm ${isChecked ? 'text-black font-bold' : 'text-gray-600'}`}>{type}</span>
+              </label>
+            );
+          })}
         </div>
       </Section>
 
-      {/* LIMPAR DESKTOP */}
       <button
         onClick={onReset}
-        className="hidden lg:flex w-full items-center justify-center gap-2 mt-8 py-3 text-sm font-semibold border border-gray-200 rounded-lg"
+        className="hidden lg:flex w-full items-center justify-center gap-2 mt-8 py-3 text-sm font-black uppercase tracking-widest border-2 border-gray-100 rounded-xl hover:bg-gray-50 active:scale-95 transition-all"
       >
         <RotateCcw className="w-4 h-4" /> Limpar Filtros
       </button>
@@ -158,4 +131,5 @@ const FilterSidebar: React.FC<FilterSidebarProps> = ({
   );
 };
 
-export default FilterSidebar;
+// Memo para evitar que o sidebar renderize de novo se as listas de modelos/finishes não mudarem
+export default memo(FilterSidebar);
