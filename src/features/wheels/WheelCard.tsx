@@ -1,122 +1,120 @@
 import React from 'react';
-import { ChevronLeft, Play, Camera } from 'lucide-react';
+import { Play, Camera } from 'lucide-react';
 import { WheelGroup } from '../../types/wheel';
+import { resolveFinishImage } from '../../utils/finishResolver';
 
-interface WheelDetailProps {
+interface WheelCardProps {
   group: WheelGroup;
-  onBack: () => void;
+  onClick: () => void;
 }
 
-const WheelDetail: React.FC<WheelDetailProps> = ({ group, onBack }) => {
-  
-  // FUNÇÃO DE OURO: Otimiza fotos e vídeos sem perder qualidade visível
-  const optimizeMedia = (url: string) => {
-    if (!url || !url.includes('cloudinary.com')) return url;
-    
-    // Para Vídeos: f_auto escolhe o melhor formato (ex: mp4/webm), q_auto comprime o peso
-    if (url.includes('/video/upload/')) {
-      return url.replace('/video/upload/', '/video/upload/f_auto,q_auto/');
-    }
-    
-    // Para Fotos: w_1200 garante nitidez em telas grandes, f_auto/q_auto reduzem o peso em até 90%
-    return url.replace('/upload/', '/upload/f_auto,q_auto,w_1200/');
-  };
+const WheelCard: React.FC<WheelCardProps> = ({ group, onClick }) => {
+  const displayTags = group.defectTags.slice(0, 3);
+  const extraTagsCount = group.defectTags.length - 3;
 
-  const mainPhoto = group.wheels[0]?.photos?.[0];
-  const videoUrl = group.wheels.find(w => w.video_url)?.video_url;
+  const folder = group.model.toLowerCase().trim().replace(/\s+/g, '');
+  const finishFileName = resolveFinishImage(group.finish);
+
+  const catalogUrl = finishFileName
+    ? `/modelos/${folder}/${finishFileName}`
+    : `/modelos/${folder}/CAPA.jpg`;
+
+  const realPhotoFallback = group.wheels[0]?.photos?.[0];
+  const emptyPlaceholder = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='400' viewBox='0 0 400 400'%3E%3Crect width='400' height='400' fill='%23eeeeee'/%3E%3Ctext x='50%25' y='50%25' font-family='sans-serif' font-size='20' fill='%23999999' text-anchor='middle' dy='.3em'%3ESem Foto%3C/text%3E%3C/svg%3E";
+
+  const hasVideo = group.wheels.some(w => w.video_url);
+  const realPhotosCount = group.wheels[0]?.photos?.length || 0;
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-8">
-      <button 
-        onClick={onBack}
-        className="flex items-center gap-2 text-gray-500 hover:text-black mb-8 font-bold uppercase text-xs tracking-widest transition-colors"
-      >
-        <ChevronLeft size={16} /> Voltar ao Catálogo
-      </button>
+    <div
+      onClick={onClick}
+      className="group bg-white rounded-2xl border border-gray-100 overflow-hidden hover:shadow-xl hover:border-black/10 transition-all duration-300 cursor-pointer flex flex-col h-full"
+    >
+      {/* AREA DA IMAGEM */}
+      <div className="aspect-square bg-gray-50 overflow-hidden relative">
+        <img
+          key={catalogUrl}
+          src={catalogUrl}
+          alt={group.model}
+          className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
+          onError={(e) => {
+            const target = e.target as HTMLImageElement;
+            if (realPhotoFallback && target.src !== realPhotoFallback) {
+              target.src = realPhotoFallback;
+              const badge = target.parentElement?.querySelector('.badge-catalogo');
+              if (badge) (badge as HTMLElement).style.display = 'none';
+            } else {
+              target.src = emptyPlaceholder;
+            }
+          }}
+        />
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
-        {/* SEÇÃO DE MÍDIA */}
-        <div className="space-y-6">
-          {videoUrl ? (
-            <div className="aspect-video rounded-3xl overflow-hidden bg-black shadow-2xl">
-              <video 
-                src={optimizeMedia(videoUrl)} 
-                controls 
-                className="w-full h-full object-contain"
-                poster={mainPhoto ? optimizeMedia(mainPhoto) : undefined}
-              />
-            </div>
-          ) : (
-            <div className="aspect-square rounded-3xl overflow-hidden bg-gray-100 shadow-xl">
-              <img 
-                src={mainPhoto ? optimizeMedia(mainPhoto) : '/placeholder.jpg'} 
-                alt={group.model}
-                className="w-full h-full object-cover"
-              />
+        <div className="absolute top-3 left-3 flex flex-col gap-1.5">
+          {hasVideo && (
+            <div className="bg-blue-600 text-white px-2.5 py-1 rounded-lg flex items-center gap-1.5 shadow-lg">
+              <Play size={12} fill="currentColor" />
+              <span className="text-[10px] font-black uppercase tracking-tighter">Vídeo Real</span>
             </div>
           )}
-
-          {/* MINIATURAS DAS OUTRAS RODAS DO GRUPO */}
-          <div className="grid grid-cols-4 gap-4">
-            {group.wheels[0]?.photos?.slice(1).map((photo, idx) => (
-              <div key={idx} className="aspect-square rounded-2xl overflow-hidden border border-gray-100 shadow-sm">
-                <img 
-                  src={optimizeMedia(photo)} 
-                  className="w-full h-full object-cover" 
-                  alt={`Detalhe ${idx}`}
-                />
-              </div>
-            ))}
-          </div>
+          {realPhotosCount > 0 && (
+            <div className="bg-white/90 backdrop-blur-sm text-black px-2.5 py-1 rounded-lg flex items-center gap-1.5 shadow-sm border border-gray-100">
+              <Camera size={12} />
+              <span className="text-[10px] font-black uppercase tracking-tighter">{realPhotosCount} Fotos</span>
+            </div>
+          )}
         </div>
 
-        {/* SEÇÃO DE INFORMAÇÕES */}
-        <div className="flex flex-col">
-          <span className="text-sm text-blue-600 font-black uppercase tracking-[0.2em] mb-2">
-            {group.brand}
-          </span>
-          <h1 className="text-5xl font-black text-gray-900 uppercase italic tracking-tighter mb-4 leading-none">
-            {group.model}
-          </h1>
-          <p className="text-xl font-bold text-gray-500 uppercase mb-8 tracking-tight">
-            {group.finish}
-          </p>
+        <div className="badge-catalogo absolute bottom-3 left-3 bg-white/90 backdrop-blur-sm text-[10px] px-2.5 py-1.5 rounded-lg font-black text-gray-500 uppercase tracking-tighter shadow-sm border border-gray-100">
+          Foto de Catálogo
+        </div>
 
-          <div className="grid grid-cols-2 gap-4 mb-8">
-            <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
-              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Aro / Diâmetro</p>
-              <p className="text-2xl font-black text-gray-900">Aro {group.size}</p>
-            </div>
-            <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
-              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Furação</p>
-              <p className="text-2xl font-black text-gray-900">{group.boltPattern}</p>
-            </div>
+        {group.quantity > 1 && (
+          <div className="absolute top-3 right-3 bg-black text-white text-[12px] px-3 py-2 rounded-xl font-black shadow-lg">
+            {group.quantity} UNIDADES
           </div>
+        )}
+      </div>
 
-          <div className="mb-8">
-            <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-4">Estado e Defeitos</h4>
-            <div className="flex flex-wrap gap-2">
-              {group.defectTags.map((tag, idx) => (
-                <span key={idx} className="px-4 py-2 bg-red-50 text-red-600 text-xs font-black uppercase rounded-xl border border-red-100">
-                  {tag}
-                </span>
-              ))}
-            </div>
-          </div>
+      {/* INFO - LETRAS AUMENTADAS */}
+      <div className="p-6 flex flex-col flex-grow">
+        <span className="text-[11px] text-gray-400 uppercase tracking-[0.15em] font-black mb-1.5">
+          {group.brand}
+        </span>
 
-          <div className="mt-auto p-8 bg-black rounded-3xl text-white flex items-center justify-between shadow-2xl">
-            <div>
-              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Disponível em Estoque</p>
-              <p className="text-3xl font-black">{group.quantity} UNIDADES</p>
-            </div>
-            <button className="bg-white text-black px-8 py-4 rounded-2xl font-black uppercase text-sm hover:scale-105 transition-transform">
-              Tenho Interesse
-            </button>
-          </div>
+        {/* Modelo: Aumentado de 'text-base' para 'text-xl' */}
+        <h3 className="font-black text-gray-900 text-xl mb-1 uppercase tracking-tighter leading-tight">
+          {group.model}
+        </h3>
+
+        {/* Acabamento: Aumentado de 'text-[11px]' para 'text-[13px]' */}
+        <p className="text-[13px] font-black text-blue-600 uppercase mb-2 tracking-tight">
+          {group.finish}
+        </p>
+
+        {/* Especificações: Aumentado de 'text-xs' para 'text-sm' */}
+        <p className="text-sm text-gray-600 mb-5 font-bold italic">
+          Aro {group.size} • {group.boltPattern}
+        </p>
+
+        <div className="mt-auto flex flex-wrap gap-2">
+          {displayTags.map((tag, index) => (
+            <span
+              key={index}
+              className="px-3 py-1.5 bg-red-50 text-red-600 text-[11px] font-black uppercase rounded-lg border border-red-100"
+            >
+              {tag}
+            </span>
+          ))}
+
+          {extraTagsCount > 0 && (
+            <span className="px-3 py-1.5 bg-gray-50 text-gray-400 text-[11px] font-black rounded-lg border border-gray-100">
+              +{extraTagsCount}
+            </span>
+          )}
         </div>
       </div>
     </div>
   );
 };
 
-export default WheelDetail;
+export default WheelCard;
