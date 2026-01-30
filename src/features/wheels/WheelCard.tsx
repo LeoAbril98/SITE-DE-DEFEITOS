@@ -8,6 +8,13 @@ interface WheelCardProps {
   onClick: () => void;
 }
 
+// Função auxiliar interna para garantir URLs leves no catálogo
+const optimizeThumb = (url: string, width: number = 400) => {
+  if (!url || !url.includes('cloudinary.com')) return url;
+  // f_auto e q_auto garantem o menor peso possível sem perda visual
+  return url.replace('/upload/', `/upload/f_auto,q_auto,w_${width}/`);
+};
+
 const WheelCard: React.FC<WheelCardProps> = ({ group, onClick }) => {
   const displayTags = group.defectTags.slice(0, 3);
   const extraTagsCount = group.defectTags.length - 3;
@@ -15,11 +22,16 @@ const WheelCard: React.FC<WheelCardProps> = ({ group, onClick }) => {
   const folder = group.model.toLowerCase().trim().replace(/\s+/g, '');
   const finishFileName = resolveFinishImage(group.finish);
 
+  // Imagem de catálogo (armazenada localmente ou em pasta pública)
   const catalogUrl = finishFileName
     ? `/modelos/${folder}/${finishFileName}`
     : `/modelos/${folder}/CAPA.jpg`;
 
-  const realPhotoFallback = group.wheels[0]?.photos?.[0];
+  // Foto real vinda do Cloudinary (otimizada para miniatura)
+  const realPhotoFallback = group.wheels[0]?.photos?.[0] 
+    ? optimizeThumb(group.wheels[0].photos[0], 400) 
+    : null;
+
   const emptyPlaceholder = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='400' viewBox='0 0 400 400'%3E%3Crect width='400' height='400' fill='%23eeeeee'/%3E%3Ctext x='50%25' y='50%25' font-family='sans-serif' font-size='20' fill='%23999999' text-anchor='middle' dy='.3em'%3ESem Foto%3C/text%3E%3C/svg%3E";
 
   const hasVideo = group.wheels.some(w => w.video_url);
@@ -30,15 +42,18 @@ const WheelCard: React.FC<WheelCardProps> = ({ group, onClick }) => {
       onClick={onClick}
       className="group bg-white rounded-2xl border border-gray-100 overflow-hidden hover:shadow-xl hover:border-black/10 transition-all duration-300 cursor-pointer flex flex-col h-full"
     >
-      {/* AREA DA IMAGEM */}
+      {/* AREA DA IMAGEM OTIMIZADA */}
       <div className="aspect-square bg-gray-50 overflow-hidden relative">
         <img
           key={catalogUrl}
           src={catalogUrl}
           alt={group.model}
+          // O navegador só baixa a imagem quando ela entra no campo de visão
+          loading="lazy"
           className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
           onError={(e) => {
             const target = e.target as HTMLImageElement;
+            // Se falhar o catálogo, tenta a foto real otimizada
             if (realPhotoFallback && target.src !== realPhotoFallback) {
               target.src = realPhotoFallback;
               const badge = target.parentElement?.querySelector('.badge-catalogo');
@@ -75,23 +90,20 @@ const WheelCard: React.FC<WheelCardProps> = ({ group, onClick }) => {
         )}
       </div>
 
-      {/* INFO - LETRAS AUMENTADAS */}
+      {/* INFO DO CARD */}
       <div className="p-6 flex flex-col flex-grow">
         <span className="text-[11px] text-gray-400 uppercase tracking-[0.15em] font-black mb-1.5">
           {group.brand}
         </span>
 
-        {/* Modelo: Aumentado de 'text-base' para 'text-xl' */}
         <h3 className="font-black text-gray-900 text-xl mb-1 uppercase tracking-tighter leading-tight">
           {group.model}
         </h3>
 
-        {/* Acabamento: Aumentado de 'text-[11px]' para 'text-[13px]' */}
         <p className="text-[13px] font-black text-blue-600 uppercase mb-2 tracking-tight">
           {group.finish}
         </p>
 
-        {/* Especificações: Aumentado de 'text-xs' para 'text-sm' */}
         <p className="text-sm text-gray-600 mb-5 font-bold italic">
           Aro {group.size} • {group.boltPattern}
         </p>
