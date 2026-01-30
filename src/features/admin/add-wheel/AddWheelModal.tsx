@@ -34,7 +34,7 @@ const AddWheelModal: React.FC<AddWheelModalProps> = ({ onClose, onSaved, wheelTo
     const { wheels, models } = useWheelCsv();
 
     /* ============================================================
-       COMPRESSÃO DE IMAGEM (Reduz 5MB para ~200KB)
+       COMPRESSÃO DE IMAGEM (Economiza sua cota de dados)
        ============================================================ */
     const compressImage = (file: File): Promise<Blob> => {
         return new Promise((resolve, reject) => {
@@ -66,7 +66,6 @@ const AddWheelModal: React.FC<AddWheelModalProps> = ({ onClose, onSaved, wheelTo
                     canvas.height = height;
                     const ctx = canvas.getContext('2d');
                     if (ctx) {
-                        ctx.imageSmoothingEnabled = true;
                         ctx.imageSmoothingQuality = 'high';
                         ctx.drawImage(img, 0, 0, width, height);
                     }
@@ -74,16 +73,13 @@ const AddWheelModal: React.FC<AddWheelModalProps> = ({ onClose, onSaved, wheelTo
                     canvas.toBlob((blob) => {
                         if (blob) resolve(blob);
                         else reject(new Error('Falha na compressão'));
-                    }, 'image/jpeg', 0.8); // 80% de qualidade mantém nitidez total
+                    }, 'image/jpeg', 0.8);
                 };
             };
             reader.onerror = (error) => reject(error);
         });
     };
 
-    /* ============================================================
-       UPLOAD PARA CLOUDINARY
-       ============================================================ */
     const uploadToCloudinary = async (file: File | Blob, resourceType: 'image' | 'video') => {
         const formData = new FormData();
         formData.append('file', file);
@@ -96,20 +92,18 @@ const AddWheelModal: React.FC<AddWheelModalProps> = ({ onClose, onSaved, wheelTo
         );
 
         if (!response.ok) throw new Error(`Falha no upload de ${resourceType}`);
-
         const data = await response.json();
         return data.secure_url;
     };
 
     /* ============================================================
-       LÓGICA DE SALVAMENTO
+       LÓGICA DE SALVAMENTO COMPLETA
        ============================================================ */
     async function handleSave() {
         if (!form.model || !form.size || saving) return;
         setSaving(true);
 
         try {
-            // 1. Upload Fotos com compressão automática
             const photoUrls: string[] = [];
             for (const item of photos) {
                 if (item instanceof File) {
@@ -121,20 +115,18 @@ const AddWheelModal: React.FC<AddWheelModalProps> = ({ onClose, onSaved, wheelTo
                 }
             }
 
-            // 2. Upload Vídeo
             let finalVideoUrl = typeof video === 'string' ? video : null;
             if (video instanceof File) {
                 finalVideoUrl = await uploadToCloudinary(video, 'video');
             }
 
-            // 3. Persistência no Supabase
             const wheelData = {
                 model: form.model,
                 brand: form.brand,
                 size: form.size,
                 bolt_pattern: form.boltPattern,
                 finish: form.finish,
-                wheel_offset: Number(form.offset),
+                wheel_offset: Number(form.offset), // Campo Offset incluído
                 description: form.description,
                 defects: form.defects,
                 photos: photoUrls,
@@ -156,7 +148,7 @@ const AddWheelModal: React.FC<AddWheelModalProps> = ({ onClose, onSaved, wheelTo
         }
     }
 
-    // Handlers e Effects... (Lógica de sugestão e fechar modal)
+    // Carregamento de dados para edição
     useEffect(() => {
         if (wheelToEdit) {
             setForm({
@@ -170,11 +162,13 @@ const AddWheelModal: React.FC<AddWheelModalProps> = ({ onClose, onSaved, wheelTo
                 defects: wheelToEdit.defects || [],
             });
             setSearchTerm(wheelToEdit.model);
-            setPhotos([wheelToEdit.photos?.[0] || null, wheelToEdit.photos?.[1] || null, wheelToEdit.photos?.[2] || null]);
+            const p = wheelToEdit.photos || [];
+            setPhotos([p[0] || null, p[1] || null, p[2] || null]);
             if (wheelToEdit.video_url) setVideoPreview(wheelToEdit.video_url);
         }
     }, [wheelToEdit]);
 
+    // Filtragem de sugestões (CSV)
     const filteredModels = models.filter(m => m.toLowerCase().includes(searchTerm.toLowerCase()));
     const arosByModel = [...new Set(wheels.filter(w => w.modelo === form.model).map(w => w.aro))];
     const furacoesByAro = [...new Set(wheels.filter(w => w.modelo === form.model && w.aro === form.size).map(w => w.furacao))];
@@ -186,23 +180,18 @@ const AddWheelModal: React.FC<AddWheelModalProps> = ({ onClose, onSaved, wheelTo
     return (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-2">
             <div className="bg-white w-full max-w-2xl rounded-3xl shadow-2xl flex flex-col max-h-[95vh]">
+                
                 <div className="flex items-center justify-between p-5 border-b">
                     <h2 className="text-xl font-black uppercase italic">{wheelToEdit ? 'Editar Roda' : 'Nova Roda'}</h2>
                     <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full"><X /></button>
                 </div>
 
                 <div className="p-5 space-y-6 overflow-y-auto custom-scroll">
+                    {/* SELEÇÃO DE MÍDIA */}
                     <div className="grid grid-cols-4 gap-3">
                         {photos.map((photo, i) => (
                             <label key={i} className="aspect-square border-2 border-dashed border-gray-200 rounded-2xl flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 overflow-hidden relative">
-                                {photo ? (
-                                    <img src={typeof photo === 'string' ? photo : URL.createObjectURL(photo)} className="w-full h-full object-cover" alt="Preview" />
-                                ) : (
-                                    <div className="text-center">
-                                        <Camera className="text-gray-300 mx-auto" size={20} />
-                                        <span className="text-[8px] font-bold text-gray-400 uppercase mt-1">Foto {i + 1}</span>
-                                    </div>
-                                )}
+                                {photo ? <img src={typeof photo === 'string' ? photo : URL.createObjectURL(photo)} className="w-full h-full object-cover" /> : <Camera className="text-gray-300" />}
                                 <input type="file" accept="image/*" className="hidden" onChange={(e) => {
                                     if (e.target.files?.[0]) {
                                         const updated = [...photos];
@@ -212,13 +201,8 @@ const AddWheelModal: React.FC<AddWheelModalProps> = ({ onClose, onSaved, wheelTo
                                 }} />
                             </label>
                         ))}
-                        <label className="aspect-square border-2 border-dashed border-blue-200 bg-blue-50/30 rounded-2xl flex flex-col items-center justify-center cursor-pointer hover:bg-blue-50 overflow-hidden relative">
-                            {videoPreview ? <video src={videoPreview} className="w-full h-full object-cover" /> : (
-                                <div className="text-center">
-                                    <Video className="text-blue-400 mx-auto" size={20} />
-                                    <span className="text-[8px] font-bold text-blue-400 uppercase mt-1">Vídeo</span>
-                                </div>
-                            )}
+                        <label className="aspect-square border-2 border-dashed border-blue-200 bg-blue-50/30 rounded-2xl flex flex-col items-center justify-center cursor-pointer overflow-hidden relative">
+                            {videoPreview ? <video src={videoPreview} className="w-full h-full object-cover" /> : <Video className="text-blue-400" />}
                             <input type="file" accept="video/*" className="hidden" onChange={(e) => {
                                 if (e.target.files?.[0]) {
                                     setVideo(e.target.files[0]);
@@ -228,54 +212,62 @@ const AddWheelModal: React.FC<AddWheelModalProps> = ({ onClose, onSaved, wheelTo
                         </label>
                     </div>
 
+                    {/* CAMPOS DO FORMULÁRIO */}
                     <div className="space-y-4">
                         <div className="relative">
                             <Search className="absolute left-3 top-3.5 text-gray-400" size={16} />
                             <input
-                                type="text"
-                                placeholder="Modelo..."
-                                className={`${fieldClass} pl-10`}
-                                value={searchTerm}
-                                onChange={(e) => { setSearchTerm(e.target.value); setShowSuggestions(true); }}
+                                type="text" placeholder="Modelo..." className={`${fieldClass} pl-10`}
+                                value={searchTerm} onChange={(e) => { setSearchTerm(e.target.value); setShowSuggestions(true); }}
                             />
                             {showSuggestions && filteredModels.length > 0 && (
                                 <div ref={suggestionRef} className="absolute left-0 right-0 mt-1 bg-white border-2 border-black rounded-xl shadow-2xl max-h-56 overflow-y-auto z-[80]">
                                     {filteredModels.map(m => (
-                                        <button key={m} type="button" className="w-full text-left px-4 py-4 hover:bg-gray-100 border-b text-sm font-bold uppercase"
+                                        <button key={m} className="w-full text-left px-4 py-4 hover:bg-gray-100 border-b text-sm font-bold uppercase"
                                             onClick={() => {
                                                 setForm({ ...form, model: m, size: '', boltPattern: '', finish: '', offset: '' });
-                                                setSearchTerm(m);
-                                                setShowSuggestions(false);
-                                            }}>
-                                            {m}
-                                        </button>
+                                                setSearchTerm(m); setShowSuggestions(false);
+                                            }}>{m}</button>
                                     ))}
                                 </div>
                             )}
                         </div>
 
                         <div className="grid grid-cols-2 gap-4">
-                            <select value={form.size} disabled={!form.model} onChange={e => setForm({ ...form, size: e.target.value, boltPattern: '', finish: '', offset: '' })} className={fieldClass}>
+                            <select value={form.size} disabled={!form.model} onChange={e => setForm({ ...form, size: e.target.value })} className={fieldClass}>
                                 <option value="">Aro</option>
                                 {arosByModel.map(a => <option key={a} value={a}>{a}</option>)}
                             </select>
-                            <select value={form.boltPattern} disabled={!form.size} onChange={e => setForm({ ...form, boltPattern: e.target.value, finish: '', offset: '' })} className={fieldClass}>
+                            <select value={form.boltPattern} disabled={!form.size} onChange={e => setForm({ ...form, boltPattern: e.target.value })} className={fieldClass}>
                                 <option value="">Furação</option>
                                 {furacoesByAro.map(f => <option key={f} value={f}>{f}</option>)}
                             </select>
                         </div>
+
+                        <div className="grid grid-cols-2 gap-4">
+                            <select value={form.finish} disabled={!form.boltPattern} onChange={e => setForm({ ...form, finish: e.target.value })} className={fieldClass}>
+                                <option value="">Acabamento</option>
+                                {acabamentosByCombo.map(a => <option key={a} value={a}>{a}</option>)}
+                            </select>
+                            <select value={form.offset} disabled={!form.finish} onChange={e => setForm({ ...form, offset: e.target.value })} className={fieldClass}>
+                                <option value="">Offset (ET)</option>
+                                {offsetsByCombo.map(o => <option key={o} value={o}>{o}mm</option>)}
+                            </select>
+                        </div>
+
+                        <textarea
+                            placeholder="Descrição adicional..." className={`${fieldClass} min-h-[80px]`}
+                            value={form.description} onChange={e => setForm({ ...form, description: e.target.value })}
+                        />
                     </div>
 
-                    <DefectTags
-                        selected={form.defects}
-                        onToggle={(d) => setForm(f => ({ ...f, defects: f.defects.includes(d) ? f.defects.filter(x => x !== d) : [...f.defects, d] }))}
-                    />
+                    <DefectTags selected={form.defects} onToggle={(d) => setForm(f => ({ ...f, defects: f.defects.includes(d) ? f.defects.filter(x => x !== d) : [...f.defects, d] }))} />
                 </div>
 
                 <div className="p-6 border-t bg-gray-50 flex justify-end gap-3 rounded-b-3xl">
                     <button onClick={onClose} className="px-6 py-2 text-sm font-bold text-gray-500">Cancelar</button>
-                    <button onClick={handleSave} disabled={saving} className="bg-black text-white px-10 py-3 rounded-xl font-bold flex items-center gap-2 shadow-lg active:scale-95 transition-transform disabled:bg-gray-300">
-                        {saving ? <Loader2 className="animate-spin w-4 h-4" /> : "Salvar"}
+                    <button onClick={handleSave} disabled={saving} className="bg-black text-white px-10 py-3 rounded-xl font-bold flex items-center gap-2 shadow-lg disabled:bg-gray-300">
+                        {saving ? <Loader2 className="animate-spin" size={16} /> : "Salvar"}
                     </button>
                 </div>
             </div>
