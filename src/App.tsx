@@ -1,26 +1,23 @@
-import React, { useEffect, useState } from 'react'; // Adicione 'React' aqui
+import React, { useEffect, useState } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { supabase } from './supabaseClient';
 import CatalogPage from './pages/CatalogPage';
 import AdminPage from './pages/AdminPage';
-import Login from './pages/Login'; // Certifique-se de que o arquivo Login.tsx está na pasta src
+import Login from './pages/Login';
+import WheelDetailPage from './pages/WheelDetailPage'; // Nova página
 
-// Componente para proteger a rota Admin
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const [session, setSession] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Verifica se o usuário já está logado no Supabase
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setLoading(false);
     });
   }, []);
 
-  if (loading) return <div style={{ padding: '20px' }}>Carregando...</div>;
-
-  // Se não houver sessão (usuário não logado), manda para o Login
+  if (loading) return <div className="p-10 text-center font-bold">Carregando...</div>;
   if (!session) return <Navigate to="/login" />;
 
   return <>{children}</>;
@@ -29,13 +26,14 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
 const App = () => {
   return (
     <Routes>
-      {/* Rota pública: Catálogo de rodas com defeitos */}
+      {/* Rota principal do catálogo */}
       <Route path="/" element={<CatalogPage />} />
 
-      {/* Nova rota de Login */}
+      {/* Rota dinâmica para detalhe da roda */}
+      <Route path="/roda/:id" element={<WheelDetailPage />} />
+
       <Route path="/login" element={<Login />} />
 
-      {/* Rota protegida: Só acessa o Admin se estiver logado */}
       <Route
         path="/admin"
         element={
@@ -44,6 +42,9 @@ const App = () => {
           </ProtectedRoute>
         }
       />
+      
+      {/* Fallback para rotas não encontradas */}
+      <Route path="*" element={<Navigate to="/" />} />
     </Routes>
   );
 };
