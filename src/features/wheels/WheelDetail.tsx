@@ -32,7 +32,7 @@ const WheelDetail: React.FC<WheelDetailProps> = ({ group, onBack }) => {
   const handleShareImages = async (item: IndividualWheel, index: number) => {
     const currentUrl = window.location.href; // Link da página atual
     const message =
-      `*RELATÓRIO TÉCNICO – START INTELIGENTE*\n\n` +
+      `*RELATÓRIO TÉCNICO – MKR RODAS*\n\n` +
       `*Modelo:* ${group.model}\n` +
       `*Unidade:* #${index + 1}\n` +
       `*Aro:* ${group.size}\n` +
