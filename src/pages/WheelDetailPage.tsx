@@ -15,21 +15,37 @@ const WheelDetailPage: React.FC = () => {
 
   useEffect(() => {
     async function fetchWheelData() {
+      if (!id) return;
+      
       try {
         setLoading(true);
-        // Decodifica o ID da URL (caso tenha espaços ou caracteres especiais)
-        const decodedId = decodeURIComponent(id || "");
 
-        const { data, error } = await supabase
+        // 1. Busca a roda específica pelo ID único da URL
+        const { data: refWheel, error: refError } = await supabase
           .from("individual_wheels")
           .select("*")
-          .eq("model", decodedId);
+          .eq("id", id)
+          .single();
 
-        if (error) throw error;
+        if (refError) throw refError;
 
-        if (data && data.length > 0) {
-          const groups = groupWheels(data);
-          setGroup(groups[0]);
+        if (refWheel) {
+          // 2. Busca todas as unidades do mesmo modelo/aro/furação/acabamento
+          const { data: allUnits, error: allUnitsError } = await supabase
+            .from("individual_wheels")
+            .select("*")
+            .eq("model", refWheel.model)
+            .eq("size", refWheel.size)
+            .eq("bolt_pattern", refWheel.bolt_pattern)
+            .eq("finish", refWheel.finish);
+
+          if (allUnitsError) throw allUnitsError;
+
+          if (allUnits && allUnits.length > 0) {
+            // Agrupa os dados para o formato esperado pelo WheelDetail
+            const groups = groupWheels(allUnits);
+            setGroup(groups[0]);
+          }
         }
       } catch (err) {
         console.error("Erro ao carregar detalhes:", err);
@@ -37,7 +53,8 @@ const WheelDetailPage: React.FC = () => {
         setLoading(false);
       }
     }
-    if (id) fetchWheelData();
+
+    fetchWheelData();
   }, [id]);
 
   return (
@@ -53,7 +70,7 @@ const WheelDetailPage: React.FC = () => {
           <WheelDetail group={group} onBack={() => navigate(-1)} />
         ) : (
           <div className="text-center py-20">
-            <h2 className="text-2xl font-black uppercase mb-4">Roda não encontrada</h2>
+            <h2 className="text-2xl font-black uppercase mb-4">Inspeção não encontrada</h2>
             <button 
               onClick={() => navigate("/")} 
               className="bg-black text-white px-8 py-3 rounded-xl font-bold uppercase text-sm"
