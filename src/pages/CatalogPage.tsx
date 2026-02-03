@@ -38,7 +38,7 @@ const CatalogPage: React.FC = () => {
   const pageRef = useRef(0);
   const fetchingRef = useRef(false);
 
-  // Carrega as opções de filtro para a Sidebar
+  // Carrega as opções dinâmicas para os selects da sidebar
   const loadFilterOptions = useCallback(async () => {
     try {
       const { data } = await supabase
@@ -74,19 +74,17 @@ const CatalogPage: React.FC = () => {
 
       let query = supabase.from("individual_wheels").select("*");
 
-      // Filtros exatos
+      // Filtros de igualdade
       if (filters.model) query = query.eq('model', filters.model);
       if (filters.boltPattern) query = query.eq('bolt_pattern', filters.boltPattern);
       if (filters.finish) query = query.eq('finish', filters.finish);
       
-      // FILTRO DE ARO ATUALIZADO:
-      // Como o FilterSidebar já envia o valor limpo (ex: "15"),
-      // enviamos direto para o Supabase sem manipulação de string.
+      // ALTERAÇÃO DO ARO: Busca por "Contém" para bater com "15x7" ou "15x10"
       if (filters.size) {
-        query = query.eq('size', filters.size);
+        query = query.ilike('size', `${filters.size}%`);
       }
 
-      // Busca por texto
+      // Busca por texto livre
       if (filters.search) {
         query = query.or(`model.ilike.%${filters.search}%,description.ilike.%${filters.search}%`);
       }
@@ -147,11 +145,6 @@ const CatalogPage: React.FC = () => {
     setIsFilterModalOpen(false);
   };
 
-  const handleCardClick = (id: string) => {
-    // Agora o CatalogPage não gerencia mais o estado da roda selecionada, 
-    // ele apenas delega a navegação via Link no JSX.
-  };
-
   return (
     <div className="flex flex-col min-h-screen bg-gray-50 text-gray-900">
       <Header />
@@ -160,12 +153,17 @@ const CatalogPage: React.FC = () => {
           
           <aside className="hidden lg:block w-64 shrink-0">
             <FilterSidebar
-              filters={filters} setFilters={setFilters} onReset={resetFilters}
-              models={filterOptions.models} boltPatterns={filterOptions.boltPatterns} finishes={filterOptions.finishes}
+              filters={filters} 
+              setFilters={setFilters} 
+              onReset={resetFilters}
+              models={filterOptions.models} 
+              boltPatterns={filterOptions.boltPatterns} 
+              finishes={filterOptions.finishes}
             />
           </aside>
 
           <div className="flex-grow">
+            {/* Barra de Busca e Botão Filtro Mobile */}
             <div className="flex flex-col sm:flex-row gap-4 mb-8">
               <div className="relative flex-grow">
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
@@ -177,56 +175,68 @@ const CatalogPage: React.FC = () => {
                   onChange={(e) => setFilters(prev => ({ ...prev, search: e.target.value }))}
                 />
               </div>
-              <button onClick={() => setIsFilterModalOpen(true)} className="lg:hidden flex items-center justify-center gap-2 px-6 py-4 bg-white shadow-sm rounded-2xl text-sm font-bold uppercase">
+              <button 
+                onClick={() => setIsFilterModalOpen(true)} 
+                className="lg:hidden flex items-center justify-center gap-2 px-6 py-4 bg-white shadow-sm rounded-2xl text-sm font-bold uppercase"
+              >
                 <SlidersHorizontal className="w-4 h-4" /> Filtros
               </button>
             </div>
 
             {loading ? (
               <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-6">
-                {[...Array(8)].map((_, i) => <div key={i} className="bg-gray-200 animate-pulse rounded-2xl aspect-[4/5]" />)}
+                {[...Array(8)].map((_, i) => (
+                  <div key={i} className="bg-gray-200 animate-pulse rounded-2xl aspect-[4/5]" />
+                ))}
               </div>
             ) : (
               <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-6">
                 {wheelGroups.map((group) => (
+                  /* ENVIANDO O UUID DA RODA PARA A PÁGINA DE DETALHES */
                   <Link 
                     key={group.id} 
                     to={`/roda/${group.wheels[0].id}`}
                     className="transition-transform hover:scale-[1.02] active:scale-[0.98]"
                   >
-                    {/* Note: O WheelCard agora recebe o ID no clique interno também por segurança */}
                     <WheelCard group={group} onClick={() => {}} />
                   </Link>
                 ))}
               </div>
             )}
 
+            {/* Infinite Scroll Loader */}
             <div ref={loadMoreRef} className="py-12 flex flex-col items-center justify-center">
               {loadingMore && <Loader2 className="w-8 h-8 animate-spin text-black mb-2" />}
               {!hasMore && !loading && wheelGroups.length > 0 && (
                 <p className="text-[10px] font-black uppercase tracking-widest text-gray-300">Fim dos resultados</p>
               )}
               {!loading && wheelGroups.length === 0 && (
-                <div className="text-center py-12">
-                   <p className="text-gray-400 font-bold italic">Nenhum resultado para os filtros aplicados.</p>
-                </div>
+                <p className="text-gray-400 font-bold italic">Nenhum resultado encontrado.</p>
               )}
             </div>
           </div>
         </div>
       </main>
 
+      {/* Modal Mobile de Filtros */}
       {isFilterModalOpen && (
-        <div className="fixed inset-0 z-[100] bg-white p-6 lg:hidden">
+        <div className="fixed inset-0 z-[100] bg-white p-6 lg:hidden overflow-y-auto">
           <div className="flex justify-between items-center mb-8">
             <h2 className="font-black uppercase italic text-2xl">Filtros</h2>
             <button onClick={() => setIsFilterModalOpen(false)}><X size={32} /></button>
           </div>
           <FilterSidebar
-            filters={filters} setFilters={setFilters} onReset={resetFilters}
-            models={filterOptions.models} boltPatterns={filterOptions.boltPatterns} finishes={filterOptions.finishes}
+            filters={filters} 
+            setFilters={setFilters} 
+            onReset={resetFilters}
+            models={filterOptions.models} 
+            boltPatterns={filterOptions.boltPatterns} 
+            finishes={filterOptions.finishes}
           />
-          <button onClick={() => setIsFilterModalOpen(false)} className="w-full bg-black text-white py-5 rounded-2xl font-black uppercase mt-8">
+          <button 
+            onClick={() => setIsFilterModalOpen(false)} 
+            className="w-full bg-black text-white py-5 rounded-2xl font-black uppercase mt-8 sticky bottom-0 shadow-2xl"
+          >
             Ver Resultados
           </button>
         </div>
