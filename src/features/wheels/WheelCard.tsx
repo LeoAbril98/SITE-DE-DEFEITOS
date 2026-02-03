@@ -5,7 +5,7 @@ import { resolveFinishImage } from '../../utils/finishResolver';
 
 interface WheelCardProps {
   group: WheelGroup;
-  onClick: () => void;
+  onClick: (id: string) => void;
 }
 
 const optimizeThumb = (url: string, width: number = 400) => {
@@ -35,7 +35,7 @@ const WheelCard: React.FC<WheelCardProps> = ({ group, onClick }) => {
 
   return (
     <div
-      onClick={onClick}
+      onClick={() => onClick(group.wheels[0].id)}
       className="group bg-white rounded-2xl border border-gray-100 overflow-hidden hover:shadow-xl hover:border-black/10 transition-all duration-300 cursor-pointer flex flex-col h-full"
     >
       {/* AREA DA IMAGEM - VOLTOU AO ORIGINAL */}
@@ -75,23 +75,24 @@ const WheelCard: React.FC<WheelCardProps> = ({ group, onClick }) => {
         <div className="badge-catalogo absolute bottom-3 left-3 bg-white/90 backdrop-blur-sm text-[10px] px-2.5 py-1.5 rounded-lg font-black text-gray-500 uppercase tracking-tighter shadow-sm border border-gray-100">
           Foto de Catálogo
         </div>
-
-        {group.quantity > 1 && (
-          <div className="absolute top-3 right-3 bg-black text-white text-[12px] px-3 py-2 rounded-xl font-black shadow-lg">
-            {group.quantity} UNIDADES
-          </div>
-        )}
       </div>
 
-      {/* INFO DO CARD - VOLTOU AO ORIGINAL */}
+      {/* INFO DO CARD - UNIDADES AGORA DEPOIS DO MODELO */}
       <div className="p-6 flex flex-col flex-grow">
         <span className="text-[11px] text-gray-400 uppercase tracking-[0.15em] font-black mb-1.5">
           {group.brand}
         </span>
 
-        <h3 className="font-black text-gray-900 text-xl mb-1 uppercase tracking-tighter leading-tight">
-          {group.model}
-        </h3>
+        <div className="flex items-center justify-between gap-2 mb-1">
+          <h3 className="font-black text-gray-900 text-xl uppercase tracking-tighter leading-tight">
+            {group.model}
+          </h3>
+          {group.quantity > 1 && (
+            <span className="bg-black text-white text-[10px] px-2 py-1 rounded-md font-black shrink-0">
+              {group.quantity} UN
+            </span>
+          )}
+        </div>
 
         <p className="text-[13px] font-black text-blue-600 uppercase mb-2 tracking-tight">
           {group.finish}
