@@ -5,7 +5,7 @@ import { resolveFinishImage } from '../../utils/finishResolver';
 
 interface WheelCardProps {
   group: WheelGroup;
-  onClick: (id: string) => void;
+  onClick: () => void;
 }
 
 const optimizeThumb = (url: string, width: number = 400) => {
@@ -35,10 +35,10 @@ const WheelCard: React.FC<WheelCardProps> = ({ group, onClick }) => {
 
   return (
     <div
-      onClick={() => onClick(group.wheels[0].id)}
+      onClick={onClick}
       className="group bg-white rounded-2xl border border-gray-100 overflow-hidden hover:shadow-xl hover:border-black/10 transition-all duration-300 cursor-pointer flex flex-col h-full"
     >
-      {/* AREA DA IMAGEM - VOLTOU AO ORIGINAL */}
+      {/* AREA DA IMAGEM - OTIMIZADA PARA MOBILE */}
       <div className="aspect-square bg-gray-50 overflow-hidden relative">
         <img
           src={catalogUrl}
@@ -57,63 +57,63 @@ const WheelCard: React.FC<WheelCardProps> = ({ group, onClick }) => {
           }}
         />
 
-        <div className="absolute top-3 left-3 flex flex-col gap-1.5">
+        {/* BADGES DE MÍDIA - COMPACTOS ELEGANTES */}
+        <div className="absolute top-2 left-2 flex flex-col gap-1 z-10">
           {hasVideo && (
-            <div className="bg-blue-600 text-white px-2.5 py-1 rounded-lg flex items-center gap-1.5 shadow-lg">
-              <Play size={12} fill="currentColor" />
-              <span className="text-[10px] font-black uppercase tracking-tighter">Vídeo Real</span>
+            <div className="bg-blue-600/90 backdrop-blur-sm text-white px-2 py-0.5 rounded-md flex items-center gap-1 shadow-md border border-white/10">
+              <Play size={10} fill="currentColor" />
+              <span className="text-[9px] font-black uppercase tracking-tighter">Vídeo</span>
             </div>
           )}
           {realPhotosCount > 0 && (
-            <div className="bg-white/90 backdrop-blur-sm text-black px-2.5 py-1 rounded-lg flex items-center gap-1.5 shadow-sm border border-gray-100">
-              <Camera size={12} />
-              <span className="text-[10px] font-black uppercase tracking-tighter">{realPhotosCount} Fotos</span>
+            <div className="bg-white/90 backdrop-blur-sm text-black px-2 py-0.5 rounded-md flex items-center gap-1 shadow-sm border border-gray-100">
+              <Camera size={10} />
+              <span className="text-[9px] font-black">{realPhotosCount}</span>
             </div>
           )}
         </div>
 
-        <div className="badge-catalogo absolute bottom-3 left-3 bg-white/90 backdrop-blur-sm text-[10px] px-2.5 py-1.5 rounded-lg font-black text-gray-500 uppercase tracking-tighter shadow-sm border border-gray-100">
+        {/* QUANTIDADE - MAIS VISÍVEL NO MOBILE */}
+        {group.quantity > 1 && (
+          <div className="absolute top-2 right-2 bg-black/80 backdrop-blur-sm text-white text-[9px] px-2 py-1 rounded-md font-black shadow-lg">
+            {group.quantity} UNIDADES
+          </div>
+        )}
+
+        <div className="badge-catalogo absolute bottom-2 left-2 bg-white/80 backdrop-blur-sm text-[8px] px-2 py-1 rounded-md font-black text-gray-400 uppercase tracking-tighter shadow-sm border border-gray-100">
           Foto de Catálogo
         </div>
       </div>
 
-      {/* INFO DO CARD - UNIDADES AGORA DEPOIS DO MODELO */}
-      <div className="p-6 flex flex-col flex-grow">
-        <span className="text-[11px] text-gray-400 uppercase tracking-[0.15em] font-black mb-1.5">
+      {/* INFO DO CARD */}
+      <div className="p-4 sm:p-6 flex flex-col flex-grow">
+        <span className="text-[10px] text-gray-400 uppercase tracking-[0.15em] font-black mb-1">
           {group.brand}
         </span>
 
-        <div className="flex items-center justify-between gap-2 mb-1">
-          <h3 className="font-black text-gray-900 text-xl uppercase tracking-tighter leading-tight">
-            {group.model}
-          </h3>
-          {group.quantity > 1 && (
-            <span className="bg-black text-white text-[10px] px-2 py-1 rounded-md font-black shrink-0">
-              {group.quantity} UN
-            </span>
-          )}
-        </div>
+        <h3 className="font-black text-gray-900 text-lg sm:text-xl mb-0.5 uppercase tracking-tighter leading-tight">
+          {group.model}
+        </h3>
 
-        <p className="text-[13px] font-black text-blue-600 uppercase mb-2 tracking-tight">
+        <p className="text-[12px] font-black text-blue-600 uppercase mb-1.5 tracking-tight truncate">
           {group.finish}
         </p>
 
-        <p className="text-sm text-gray-600 mb-5 font-bold italic">
+        <p className="text-xs sm:text-sm text-gray-600 mb-4 font-bold italic">
           Aro {group.size} • {group.boltPattern}
         </p>
 
-        <div className="mt-auto flex flex-wrap gap-2">
+        <div className="mt-auto flex flex-wrap gap-1.5">
           {displayTags.map((tag, index) => (
             <span
               key={index}
-              className="px-3 py-1.5 bg-red-50 text-red-600 text-[11px] font-black uppercase rounded-lg border border-red-100"
+              className="px-2 py-1 bg-red-50 text-red-600 text-[10px] font-black uppercase rounded-lg border border-red-100"
             >
               {tag}
             </span>
           ))}
-
           {extraTagsCount > 0 && (
-            <span className="px-3 py-1.5 bg-gray-50 text-gray-400 text-[11px] font-black rounded-lg border border-gray-100">
+            <span className="px-2 py-1 bg-gray-50 text-gray-400 text-[10px] font-black rounded-lg border border-gray-100">
               +{extraTagsCount}
             </span>
           )}
