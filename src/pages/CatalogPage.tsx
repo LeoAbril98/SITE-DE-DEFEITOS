@@ -74,19 +74,24 @@ const CatalogPage: React.FC = () => {
 
       let query = supabase.from("individual_wheels").select("*");
 
+      // Filtros exatos
       if (filters.model) query = query.eq('model', filters.model);
       if (filters.boltPattern) query = query.eq('bolt_pattern', filters.boltPattern);
       if (filters.finish) query = query.eq('finish', filters.finish);
       
+      // FILTRO DE ARO ATUALIZADO:
+      // Como o FilterSidebar já envia o valor limpo (ex: "15"),
+      // enviamos direto para o Supabase sem manipulação de string.
       if (filters.size) {
-        const sizeVal = filters.size.replace("Aro ", "").trim();
-        query = query.eq('size', sizeVal);
+        query = query.eq('size', filters.size);
       }
 
+      // Busca por texto
       if (filters.search) {
         query = query.or(`model.ilike.%${filters.search}%,description.ilike.%${filters.search}%`);
       }
 
+      // Filtro de array (Defeitos)
       if (filters.defectType) {
         query = query.contains('defects', [filters.defectType]);
       }
@@ -142,6 +147,11 @@ const CatalogPage: React.FC = () => {
     setIsFilterModalOpen(false);
   };
 
+  const handleCardClick = (id: string) => {
+    // Agora o CatalogPage não gerencia mais o estado da roda selecionada, 
+    // ele apenas delega a navegação via Link no JSX.
+  };
+
   return (
     <div className="flex flex-col min-h-screen bg-gray-50 text-gray-900">
       <Header />
@@ -179,13 +189,13 @@ const CatalogPage: React.FC = () => {
             ) : (
               <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-6">
                 {wheelGroups.map((group) => (
-                  /* USANDO O ID REAL (UUID) DA PRIMEIRA RODA PARA A URL */
                   <Link 
                     key={group.id} 
                     to={`/roda/${group.wheels[0].id}`}
                     className="transition-transform hover:scale-[1.02] active:scale-[0.98]"
                   >
-                    <WheelCard group={group} />
+                    {/* Note: O WheelCard agora recebe o ID no clique interno também por segurança */}
+                    <WheelCard group={group} onClick={() => {}} />
                   </Link>
                 ))}
               </div>
@@ -196,12 +206,16 @@ const CatalogPage: React.FC = () => {
               {!hasMore && !loading && wheelGroups.length > 0 && (
                 <p className="text-[10px] font-black uppercase tracking-widest text-gray-300">Fim dos resultados</p>
               )}
+              {!loading && wheelGroups.length === 0 && (
+                <div className="text-center py-12">
+                   <p className="text-gray-400 font-bold italic">Nenhum resultado para os filtros aplicados.</p>
+                </div>
+              )}
             </div>
           </div>
         </div>
       </main>
 
-      {/* Modal Mobile */}
       {isFilterModalOpen && (
         <div className="fixed inset-0 z-[100] bg-white p-6 lg:hidden">
           <div className="flex justify-between items-center mb-8">
