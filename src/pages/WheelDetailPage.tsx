@@ -94,21 +94,22 @@ const WheelDetailPage: React.FC = () => {
   }, []);
 
   return (
-    <div className="flex flex-col min-h-screen bg-white text-gray-900 relative">
+    // Adicionado overflow-x-hidden para evitar o scroll lateral em dispositivos móveis
+    <div className="flex flex-col min-h-screen bg-white text-gray-900 relative overflow-x-hidden">
       <Header />
 
       {/* BOTÃO VOLTAR FLUTUANTE */}
       {showFloatingElements && !loading && !error && (
         <div
-          className="fixed left-4 sm:left-8 z-[60] transition-all duration-300 animate-in slide-in-from-left-5"
+          className="fixed left-4 z-[60] transition-all duration-300 animate-in slide-in-from-left-5"
           style={{ top: `${headerHeight + 20}px` }}
         >
           <button
             onClick={() => navigate(-1)}
-            className="group flex items-center gap-2 px-5 py-3 rounded-2xl bg-white/90 backdrop-blur-md border border-gray-200 shadow-2xl hover:bg-white transition-all active:scale-95"
+            className="group flex items-center gap-2 px-4 py-3 sm:px-5 rounded-2xl bg-white/90 backdrop-blur-md border border-gray-200 shadow-2xl hover:bg-white transition-all active:scale-95"
           >
             <ChevronLeft className="w-5 h-5 transition-transform group-hover:-translate-x-1" />
-            <span className="text-xs font-black uppercase tracking-widest text-gray-900">
+            <span className="text-[10px] sm:text-xs font-black uppercase tracking-widest text-gray-900">
               Voltar
             </span>
           </button>
@@ -117,10 +118,10 @@ const WheelDetailPage: React.FC = () => {
 
       {/* BOTÃO VOLTAR AO TOPO */}
       {showFloatingElements && !loading && !error && (
-        <div className="fixed right-4 sm:right-8 bottom-8 z-[60] animate-in fade-in zoom-in duration-300">
+        <div className="fixed right-4 bottom-6 sm:right-8 sm:bottom-8 z-[60] animate-in fade-in zoom-in duration-300">
           <button
             onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
-            className="group p-4 rounded-2xl bg-black text-white shadow-[0_20px_40px_rgba(0,0,0,0.3)] hover:bg-gray-800 transition-all active:scale-90 border border-white/10"
+            className="group p-3 sm:p-4 rounded-2xl bg-black text-white shadow-[0_20px_40px_rgba(0,0,0,0.3)] hover:bg-gray-800 transition-all active:scale-90 border border-white/10"
             aria-label="Voltar ao topo"
           >
             <ChevronUp className="w-6 h-6 group-hover:-translate-y-1 transition-transform" />
@@ -148,6 +149,7 @@ const WheelDetailPage: React.FC = () => {
             </button>
           </div>
         ) : (
+          /* O componente WheelDetail também deve ter classes break-words em seus textos internos */
           <WheelDetail group={group} onBack={() => navigate(-1)} />
         )}
       </main>
