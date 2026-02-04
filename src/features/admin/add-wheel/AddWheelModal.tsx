@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { X, Loader2, Search, Video, Camera } from 'lucide-react';
 import { supabase } from '../../../lib/supabase';
 import { IndividualWheel } from '../../../types/wheel';
@@ -17,7 +17,7 @@ const AddWheelModal: React.FC<AddWheelModalProps> = ({ onClose, onSaved, wheelTo
     });
 
     const [saving, setSaving] = useState(false);
-    const [uploadProgress, setUploadProgress] = useState(0); 
+    const [uploadProgress, setUploadProgress] = useState(0);
     const [photos, setPhotos] = useState<(File | string | null)[]>([null, null, null]);
     const [video, setVideo] = useState<File | string | null>(null);
     const [videoPreview, setVideoPreview] = useState<string | null>(null);
@@ -25,9 +25,18 @@ const AddWheelModal: React.FC<AddWheelModalProps> = ({ onClose, onSaved, wheelTo
     const [showSuggestions, setShowSuggestions] = useState(false);
     const suggestionRef = useRef<HTMLDivElement>(null);
 
+    // ✅ Hook do CSV
     const { wheels, models } = useWheelCsv();
 
-    // --- COMPRESSÃO DE IMAGEM: Reduz arquivos de ~5MB para ~200KB ---
+    // ✅ Filtragem Memoizada: Garante que a lista atualize assim que 'models' carregar
+    const filteredModels = useMemo(() => {
+        if (!searchTerm) return [];
+        return models.filter(m =>
+            m.toLowerCase().includes(searchTerm.toLowerCase())
+        ).slice(0, 10); // Limita a 10 para performance
+    }, [searchTerm, models]);
+
+    // --- LÓGICA DE COMPRESSÃO E UPLOAD (MANTIDA) ---
     const compressImage = (file: File): Promise<Blob> => {
         return new Promise((resolve, reject) => {
             const reader = new FileReader();
@@ -53,7 +62,6 @@ const AddWheelModal: React.FC<AddWheelModalProps> = ({ onClose, onSaved, wheelTo
         });
     };
 
-    // --- UPLOAD COM MONITORAMENTO DE PROGRESSO (XHR) ---
     const uploadToCloudinary = (file: File | Blob, resourceType: 'image' | 'video'): Promise<string> => {
         return new Promise((resolve, reject) => {
             const xhr = new XMLHttpRequest();
@@ -61,21 +69,13 @@ const AddWheelModal: React.FC<AddWheelModalProps> = ({ onClose, onSaved, wheelTo
             formData.append('file', file);
             formData.append('upload_preset', 'vqsa6bwd');
             formData.append('folder', 'wheels_app');
-
             xhr.open('POST', `https://api.cloudinary.com/v1_1/deu98m3rp/${resourceType}/upload`);
-
             xhr.upload.onprogress = (event) => {
                 if (event.lengthComputable) {
-                    const percent = Math.round((event.loaded / event.total) * 100);
-                    setUploadProgress(percent);
+                    setUploadProgress(Math.round((event.loaded / event.total) * 100));
                 }
             };
-
-            xhr.onload = () => {
-                if (xhr.status === 200) resolve(JSON.parse(xhr.responseText).secure_url);
-                else reject(new Error('Falha no upload'));
-            };
-
+            xhr.onload = () => xhr.status === 200 ? resolve(JSON.parse(xhr.responseText).secure_url) : reject(new Error('Falha no upload'));
             xhr.onerror = () => reject(new Error('Erro de conexão'));
             xhr.send(formData);
         });
@@ -96,9 +96,7 @@ const AddWheelModal: React.FC<AddWheelModalProps> = ({ onClose, onSaved, wheelTo
             }
 
             let finalVideoUrl = typeof video === 'string' ? video : null;
-            if (video instanceof File) {
-                finalVideoUrl = await uploadToCloudinary(video, 'video');
-            }
+            if (video instanceof File) finalVideoUrl = await uploadToCloudinary(video, 'video');
 
             const wheelData = {
                 model: form.model, brand: form.brand, size: form.size, bolt_pattern: form.boltPattern,
@@ -119,7 +117,7 @@ const AddWheelModal: React.FC<AddWheelModalProps> = ({ onClose, onSaved, wheelTo
         }
     }
 
-    // Handlers e Effects para busca e edição
+    // Carregar dados se for edição
     useEffect(() => {
         if (wheelToEdit) {
             setForm({
@@ -135,18 +133,18 @@ const AddWheelModal: React.FC<AddWheelModalProps> = ({ onClose, onSaved, wheelTo
         }
     }, [wheelToEdit]);
 
-    const filteredModels = models.filter(m => m.toLowerCase().includes(searchTerm.toLowerCase()));
-    const arosByModel = [...new Set(wheels.filter(w => w.modelo === form.model).map(w => w.aro))];
-    const furacoesByAro = [...new Set(wheels.filter(w => w.modelo === form.model && w.aro === form.size).map(w => w.furacao))];
-    const acabamentosByCombo = [...new Set(wheels.filter(w => w.modelo === form.model && w.aro === form.size && w.furacao === form.boltPattern).map(w => w.acabamento))];
-    const offsetsByCombo = [...new Set(wheels.filter(w => w.modelo === form.model && w.aro === form.size && w.furacao === form.boltPattern && w.acabamento === form.finish).map(w => w.offset))].filter(Boolean).sort((a, b) => Number(a) - Number(b));
+    // ✅ Lógica dos Selects baseados no CSV
+    const arosByModel = useMemo(() => [...new Set(wheels.filter(w => w.modelo === form.model).map(w => w.aro))], [wheels, form.model]);
+    const furacoesByAro = useMemo(() => [...new Set(wheels.filter(w => w.modelo === form.model && w.aro === form.size).map(w => w.furacao))], [wheels, form.model, form.size]);
+    const acabamentosByCombo = useMemo(() => [...new Set(wheels.filter(w => w.modelo === form.model && w.aro === form.size && w.furacao === form.boltPattern).map(w => w.acabamento))], [wheels, form.model, form.size, form.boltPattern]);
+    const offsetsByCombo = useMemo(() => [...new Set(wheels.filter(w => w.modelo === form.model && w.aro === form.size && w.furacao === form.boltPattern && w.acabamento === form.finish).map(w => w.offset))].filter(Boolean).sort((a, b) => Number(a) - Number(b)), [wheels, form.model, form.size, form.boltPattern, form.finish]);
 
-    const fieldClass = 'w-full border-2 rounded-xl p-3 text-base bg-white focus:border-black outline-none transition-all disabled:bg-gray-50';
+    const fieldClass = 'w-full border-2 rounded-xl p-3 text-base bg-white focus:border-black outline-none transition-all disabled:bg-gray-50 text-black font-medium';
 
     return (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-2">
-            <div className="bg-white w-full max-w-2xl rounded-3xl shadow-2xl flex flex-col max-h-[95vh]">
-                
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-2" onClick={onClose}>
+            <div className="bg-white w-full max-w-2xl rounded-3xl shadow-2xl flex flex-col max-h-[95vh] animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
+
                 <div className="flex items-center justify-between p-5 border-b">
                     <h2 className="text-xl font-black uppercase italic">{wheelToEdit ? 'Editar Roda' : 'Nova Roda'}</h2>
                     <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full transition-colors"><X /></button>
@@ -157,7 +155,7 @@ const AddWheelModal: React.FC<AddWheelModalProps> = ({ onClose, onSaved, wheelTo
                     <div className="grid grid-cols-4 gap-3">
                         {photos.map((photo, i) => (
                             <label key={i} className="aspect-square border-2 border-dashed border-gray-200 rounded-2xl flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 overflow-hidden relative">
-                                {photo ? <img src={typeof photo === 'string' ? photo : URL.createObjectURL(photo)} className="w-full h-full object-cover" /> : <Camera className="text-gray-300" />}
+                                {photo ? <img src={typeof photo === 'string' ? photo : URL.createObjectURL(photo)} className="w-full h-full object-cover" alt={`Preview ${i}`} /> : <Camera className="text-gray-300" />}
                                 <input type="file" accept="image/*" className="hidden" onChange={(e) => {
                                     if (e.target.files?.[0]) {
                                         const updated = [...photos];
@@ -182,18 +180,29 @@ const AddWheelModal: React.FC<AddWheelModalProps> = ({ onClose, onSaved, wheelTo
                     {/* CAMPOS TÉCNICOS */}
                     <div className="space-y-4">
                         <div className="relative">
-                            <Search className="absolute left-3 top-3.5 text-gray-400" size={16} />
-                            <input
-                                type="text" placeholder="Modelo..." className={`${fieldClass} pl-10`}
-                                value={searchTerm} onChange={(e) => { setSearchTerm(e.target.value); setShowSuggestions(true); }}
-                            />
-                            {showSuggestions && filteredModels.length > 0 && (
+                            <label className="text-[10px] font-black uppercase text-gray-400 mb-1 block ml-1">Modelo do Fabricante</label>
+                            <div className="relative">
+                                <Search className="absolute left-3 top-3.5 text-gray-400" size={16} />
+                                <input
+                                    type="text"
+                                    placeholder={models.length === 0 ? "Carregando modelos..." : "Pesquise o modelo..."}
+                                    className={`${fieldClass} pl-10`}
+                                    value={searchTerm}
+                                    onChange={(e) => { setSearchTerm(e.target.value); setShowSuggestions(true); }}
+                                    onFocus={() => setShowSuggestions(true)}
+                                />
+                                {models.length === 0 && <Loader2 className="absolute right-3 top-3.5 animate-spin text-gray-300" size={16} />}
+                            </div>
+
+                            {/* SUGESTÕES */}
+                            {showSuggestions && searchTerm && filteredModels.length > 0 && (
                                 <div ref={suggestionRef} className="absolute left-0 right-0 mt-1 bg-white border-2 border-black rounded-xl shadow-2xl max-h-56 overflow-y-auto z-[80]">
                                     {filteredModels.map(m => (
                                         <button key={m} className="w-full text-left px-4 py-4 hover:bg-gray-100 border-b text-sm font-bold uppercase"
                                             onClick={() => {
                                                 setForm({ ...form, model: m, size: '', boltPattern: '', finish: '', offset: '' });
-                                                setSearchTerm(m); setShowSuggestions(false);
+                                                setSearchTerm(m);
+                                                setShowSuggestions(false);
                                             }}>{m}</button>
                                     ))}
                                 </div>
@@ -201,60 +210,74 @@ const AddWheelModal: React.FC<AddWheelModalProps> = ({ onClose, onSaved, wheelTo
                         </div>
 
                         <div className="grid grid-cols-2 gap-4">
-                            <select value={form.size} disabled={!form.model} onChange={e => setForm({ ...form, size: e.target.value })} className={fieldClass}>
-                                <option value="">Aro</option>
-                                {arosByModel.map(a => <option key={a} value={a}>{a}</option>)}
-                            </select>
-                            <select value={form.boltPattern} disabled={!form.size} onChange={e => setForm({ ...form, boltPattern: e.target.value })} className={fieldClass}>
-                                <option value="">Furação</option>
-                                {furacoesByAro.map(f => <option key={f} value={f}>{f}</option>)}
-                            </select>
+                            <div className="space-y-1">
+                                <label className="text-[10px] font-black uppercase text-gray-400 block ml-1">Aro</label>
+                                <select value={form.size} disabled={!form.model} onChange={e => setForm({ ...form, size: e.target.value })} className={fieldClass}>
+                                    <option value="">Selecione</option>
+                                    {arosByModel.map(a => <option key={a} value={a}>{a}</option>)}
+                                </select>
+                            </div>
+                            <div className="space-y-1">
+                                <label className="text-[10px] font-black uppercase text-gray-400 block ml-1">Furação</label>
+                                <select value={form.boltPattern} disabled={!form.size} onChange={e => setForm({ ...form, boltPattern: e.target.value })} className={fieldClass}>
+                                    <option value="">Selecione</option>
+                                    {furacoesByAro.map(f => <option key={f} value={f}>{f}</option>)}
+                                </select>
+                            </div>
                         </div>
 
                         <div className="grid grid-cols-2 gap-4">
-                            <select value={form.finish} disabled={!form.boltPattern} onChange={e => setForm({ ...form, finish: e.target.value })} className={fieldClass}>
-                                <option value="">Acabamento</option>
-                                {acabamentosByCombo.map(a => <option key={a} value={a}>{a}</option>)}
-                            </select>
-                            <select value={form.offset} disabled={!form.finish} onChange={e => setForm({ ...form, offset: e.target.value })} className={fieldClass}>
-                                <option value="">Offset (ET)</option>
-                                {offsetsByCombo.map(o => <option key={o} value={o}>{o}mm</option>)}
-                            </select>
+                            <div className="space-y-1">
+                                <label className="text-[10px] font-black uppercase text-gray-400 block ml-1">Acabamento</label>
+                                <select value={form.finish} disabled={!form.boltPattern} onChange={e => setForm({ ...form, finish: e.target.value })} className={fieldClass}>
+                                    <option value="">Selecione</option>
+                                    {acabamentosByCombo.map(a => <option key={a} value={a}>{a}</option>)}
+                                </select>
+                            </div>
+                            <div className="space-y-1">
+                                <label className="text-[10px] font-black uppercase text-gray-400 block ml-1">Offset (ET)</label>
+                                <select value={form.offset} disabled={!form.finish} onChange={e => setForm({ ...form, offset: e.target.value })} className={fieldClass}>
+                                    <option value="">Selecione</option>
+                                    {offsetsByCombo.map(o => <option key={o} value={o}>{o}mm</option>)}
+                                </select>
+                            </div>
                         </div>
 
-                        <textarea
-                            placeholder="Descrição adicional..." className={`${fieldClass} min-h-[80px]`}
-                            value={form.description} onChange={e => setForm({ ...form, description: e.target.value })}
-                        />
+                        <div className="space-y-1">
+                            <label className="text-[10px] font-black uppercase text-gray-400 block ml-1">Notas sobre o estado</label>
+                            <textarea
+                                placeholder="Descreva os detalhes desta unidade específica..." className={`${fieldClass} min-h-[80px]`}
+                                value={form.description} onChange={e => setForm({ ...form, description: e.target.value })}
+                            />
+                        </div>
                     </div>
 
                     <DefectTags selected={form.defects} onToggle={(d) => setForm(f => ({ ...f, defects: f.defects.includes(d) ? f.defects.filter(x => x !== d) : [...f.defects, d] }))} />
                 </div>
 
-                {/* RODAPÉ COM BARRA DE PROGRESSO */}
                 <div className="p-6 border-t bg-gray-50 rounded-b-3xl">
                     {saving && (
-                        <div className="mb-4">
+                        <div className="mb-4 animate-in fade-in slide-in-from-bottom-2">
                             <div className="flex justify-between text-[10px] font-black uppercase tracking-widest mb-1 text-blue-600">
                                 <span>Enviando arquivos...</span>
                                 <span>{uploadProgress}%</span>
                             </div>
                             <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
-                                <div 
-                                    className="h-full bg-blue-600 transition-all duration-300 shadow-[0_0_8px_rgba(37,99,235,0.5)]" 
+                                <div
+                                    className="h-full bg-blue-600 transition-all duration-300 shadow-[0_0_8px_rgba(37,99,235,0.5)]"
                                     style={{ width: `${uploadProgress}%` }}
                                 />
                             </div>
                         </div>
                     )}
                     <div className="flex justify-end gap-3">
-                        <button onClick={onClose} className="px-6 py-2 text-sm font-bold text-gray-500">Cancelar</button>
-                        <button 
-                            onClick={handleSave} 
-                            disabled={saving} 
-                            className="bg-black text-white px-10 py-3 rounded-xl font-bold flex items-center gap-2 shadow-lg disabled:bg-gray-300 min-w-[140px] justify-center"
+                        <button onClick={onClose} className="px-6 py-2 text-sm font-bold text-gray-500 hover:text-black transition-colors">Cancelar</button>
+                        <button
+                            onClick={handleSave}
+                            disabled={saving || !form.model || !form.size}
+                            className="bg-black text-white px-10 py-3 rounded-xl font-bold flex items-center gap-2 shadow-lg disabled:bg-gray-300 min-w-[140px] justify-center active:scale-95 transition-all"
                         >
-                            {saving ? <Loader2 className="animate-spin" size={16} /> : "Salvar"}
+                            {saving ? <Loader2 className="animate-spin" size={16} /> : "Salvar Roda"}
                         </button>
                     </div>
                 </div>
