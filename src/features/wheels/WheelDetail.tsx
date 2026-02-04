@@ -20,54 +20,44 @@ interface WheelDetailProps {
 
 const optimizeMedia = (url: string, width?: number, isPoster?: boolean) => {
   if (!url || !url.includes("cloudinary.com")) return url;
-
   if (url.includes("/video/upload/") && isPoster) {
-    return url
-      .replace("/video/upload/", "/video/upload/f_auto,q_auto,so_0/")
-      .replace(".mp4", ".jpg");
+    return url.replace("/video/upload/", "/video/upload/f_auto,q_auto,so_0/").replace(".mp4", ".jpg");
   }
-
   if (url.includes("/video/upload/")) {
     return url.replace("/video/upload/", "/video/upload/f_auto,q_auto/");
   }
-
   const params = `f_auto,q_auto${width ? `,w_${width}` : ""}`;
   return url.replace("/upload/", `/upload/${params}/`);
 };
 
 const WheelDetail: React.FC<WheelDetailProps> = ({ group, onBack }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [selectedItem, setSelectedItem] = useState<{
-    item: IndividualWheel;
-    index: number;
-  } | null>(null);
-  const [downloadStatus, setDownloadStatus] = useState({
-    active: false,
-    current: 0,
-    total: 0,
-  });
+  const [selectedItem, setSelectedItem] = useState<{ item: IndividualWheel; index: number; } | null>(null);
+
+  // Estado de download agora controla o feedback visual imediato
+  const [downloadStatus, setDownloadStatus] = useState({ active: false, current: 0, total: 0 });
 
   const folder = group.model.toLowerCase().trim().replace(/\s+/g, "");
   const finishFileName = resolveFinishImage(group.finish);
-  const catalogUrl = finishFileName
-    ? `/modelos/${folder}/${finishFileName}`
-    : `/modelos/${folder}/CAPA.jpg`;
+  const catalogUrl = finishFileName ? `/modelos/${folder}/${finishFileName}` : `/modelos/${folder}/CAPA.jpg`;
 
   const getTechnicalMessage = (index: number) => {
     const currentUrl = window.location.href;
     const bolt = (group.boltPattern || (group as any).bolt_pattern || "").toString();
     const technicalInfo = `${group.model} ${group.size} ${bolt} ${group.finish}`;
-    return `*MKR RODAS - RELATÓRIO TÉCNICO*\n\n${technicalInfo.toUpperCase()}\n*Unidade:* #${index + 1
-      }\n\n🔗 *Link:* ${currentUrl}`;
+    return `*MKR RODAS - RELATÓRIO TÉCNICO*\n\n${technicalInfo.toUpperCase()}\n*Unidade:* #${index + 1}\n\n🔗 *Link:* ${currentUrl}`;
   };
 
   const handleShareClick = (item: IndividualWheel, index: number) => {
     const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
+    // Feedback imediato: Abre o modal de progresso mesmo no mobile para o usuário ver que está "trabalhando"
+    setSelectedItem({ item, index });
+    setIsModalOpen(true);
+
+    // Se for mobile, inicia o processo de preparação automaticamente ao abrir o modal
     if (isMobile) {
       executeShare(item, index, true);
-    } else {
-      setSelectedItem({ item, index });
-      setIsModalOpen(true);
     }
   };
 
@@ -81,16 +71,14 @@ const WheelDetail: React.FC<WheelDetailProps> = ({ group, onBack }) => {
   };
 
   const executeShare = async (item: IndividualWheel, index: number, isMobile: boolean) => {
-    const allMedia = [
-      ...(item.photos || []),
-      ...(item.video_url ? [item.video_url] : []),
-    ];
+    const allMedia = [...(item.photos || []), ...(item.video_url ? [item.video_url] : [])];
 
+    // Inicia o estado de carregamento visível
     setDownloadStatus({ active: true, current: 0, total: allMedia.length });
 
     try {
       if (!isMobile) {
-        // Desktop: Download individual de cada arquivo
+        // Desktop: Download individual
         for (let i = 0; i < allMedia.length; i++) {
           setDownloadStatus((prev) => ({ ...prev, current: i + 1 }));
           const response = await fetch(optimizeMedia(allMedia[i], 1200));
@@ -107,14 +95,17 @@ const WheelDetail: React.FC<WheelDetailProps> = ({ group, onBack }) => {
           await new Promise((r) => setTimeout(r, 500));
         }
       } else {
-        // Mobile: Compartilhamento múltiplo nativo
+        // Mobile: Prepara arquivos com feedback visual
         if (allMedia.length > 0 && navigator.share) {
           const filesToShare: File[] = [];
-          for (let i = 0; i < allMedia.length; i++) {
+          // Processa até 4 mídias para não estourar o tempo de resposta do mobile
+          const mediaToProcess = allMedia.slice(0, 4);
+
+          for (let i = 0; i < mediaToProcess.length; i++) {
             setDownloadStatus((prev) => ({ ...prev, current: i + 1 }));
-            const response = await fetch(optimizeMedia(allMedia[i], 800));
+            const response = await fetch(optimizeMedia(mediaToProcess[i], 800));
             const blob = await response.blob();
-            const isVideo = allMedia[i].includes("/video/") || allMedia[i].includes(".mp4");
+            const isVideo = mediaToProcess[i].includes("/video/") || mediaToProcess[i].includes(".mp4");
             const ext = isVideo ? "mp4" : "jpg";
             const type = isVideo ? "video/mp4" : "image/jpeg";
             filesToShare.push(new File([blob], `mkr_media_${i + 1}.${ext}`, { type }));
@@ -126,18 +117,20 @@ const WheelDetail: React.FC<WheelDetailProps> = ({ group, onBack }) => {
               text: getTechnicalMessage(index),
             });
             setDownloadStatus({ active: false, current: 0, total: 0 });
+            setIsModalOpen(false);
             return;
           }
         }
       }
-
-      // Fallback WhatsApp
-      window.open(`https://wa.me/?text=${encodeURIComponent(getTechnicalMessage(index))}`, "_blank");
-      setIsModalOpen(false);
     } catch (err) {
-      console.error(err);
+      console.error("Erro no compartilhamento:", err);
     } finally {
+      // Fallback para WhatsApp se o compartilhamento falhar ou se for mobile padrão
+      if (isMobile && downloadStatus.active) {
+        window.open(`https://wa.me/?text=${encodeURIComponent(getTechnicalMessage(index))}`, "_blank");
+      }
       setDownloadStatus({ active: false, current: 0, total: 0 });
+      setIsModalOpen(false);
     }
   };
 
@@ -147,6 +140,7 @@ const WheelDetail: React.FC<WheelDetailProps> = ({ group, onBack }) => {
         <ChevronLeft className="w-4 h-4" /> Voltar ao catálogo
       </button>
 
+      {/* HEADER PRINCIPAL */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-12 border-b-4 border-gray-50 pb-12">
         <div className="flex items-start gap-4 sm:gap-6 min-w-0">
           <div className="w-20 h-20 md:w-28 md:h-28 rounded-2xl overflow-hidden border-2 border-gray-100 shadow-sm bg-gray-50 flex-shrink-0">
@@ -194,6 +188,7 @@ const WheelDetail: React.FC<WheelDetailProps> = ({ group, onBack }) => {
         ))}
       </div>
 
+      {/* MODAL DE STATUS - Agora aparece no mobile para dar feedback */}
       {isModalOpen && selectedItem && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
           <div className="bg-white w-full max-w-md rounded-[2.5rem] p-8 shadow-2xl relative animate-in zoom-in">
@@ -204,19 +199,33 @@ const WheelDetail: React.FC<WheelDetailProps> = ({ group, onBack }) => {
               <div className="w-20 h-20 bg-blue-50 rounded-full flex items-center justify-center mx-auto">
                 <Share2 className="text-blue-600 w-10 h-10" />
               </div>
-              <h2 className="text-2xl font-black uppercase italic tracking-tight text-gray-900">Relatório Técnico</h2>
+              <h2 className="text-2xl font-black uppercase italic tracking-tight text-gray-900">
+                {downloadStatus.active ? "Preparando Mídias" : "Relatório Técnico"}
+              </h2>
+
               <div className="space-y-4 text-left bg-gray-50 p-6 rounded-3xl border border-gray-100">
-                <div className="flex gap-3 items-start"><CheckCircle2 className="text-green-500 shrink-0 w-5 h-5" /><p className="font-bold italic text-sm text-gray-900">Download automático de mídias.</p></div>
-                <div className="flex gap-3 items-start"><CheckCircle2 className="text-green-500 shrink-0 w-5 h-5" /><p className="font-bold italic text-sm text-gray-900">Mensagem formatada para WhatsApp.</p></div>
+                {downloadStatus.active ? (
+                  <div className="flex flex-col items-center gap-4 py-4 w-full">
+                    <Loader2 className="w-10 h-10 animate-spin text-blue-600" />
+                    <p className="font-black uppercase text-[10px] tracking-widest text-gray-400">
+                      Baixando arquivos ({downloadStatus.current}/{downloadStatus.total})
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex gap-3 items-start"><CheckCircle2 className="text-green-500 shrink-0 w-5 h-5" /><p className="font-bold italic text-sm text-gray-900">Download automático de mídias.</p></div>
+                    <div className="flex gap-3 items-start"><CheckCircle2 className="text-green-500 shrink-0 w-5 h-5" /><p className="font-bold italic text-sm text-gray-900">Mensagem formatada para WhatsApp.</p></div>
+                  </>
+                )}
               </div>
+
               <div className="grid grid-cols-1 gap-3">
                 <button
                   disabled={downloadStatus.active}
                   onClick={() => executeShare(selectedItem.item, selectedItem.index, false)}
                   className={`py-6 rounded-2xl font-black uppercase text-sm tracking-widest flex items-center justify-center gap-3 transition-all ${downloadStatus.active ? "bg-blue-600 text-white" : "bg-black text-white hover:bg-gray-800 shadow-xl"}`}
                 >
-                  {downloadStatus.active ? <Loader2 className="animate-spin" size={20} /> : <Download size={20} />}
-                  {downloadStatus.active ? `Baixando (${downloadStatus.current}/${downloadStatus.total})` : "Gerar e Baixar Tudo"}
+                  {downloadStatus.active ? "Processando..." : "Gerar e Enviar Relatório"}
                 </button>
                 <button onClick={() => copyToClipboard(selectedItem.index)} className="py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest border-2 border-gray-100 text-gray-400 hover:text-black hover:border-black flex items-center justify-center gap-2">
                   <Copy size={14} /> Copiar Texto Técnico

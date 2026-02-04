@@ -5,12 +5,13 @@ import Footer from "../components/layout/Footer";
 import WheelCard from "../features/wheels/WheelCard";
 import FilterSidebar from "../features/wheels/FilterSidebar";
 
-import { FilterState, WheelGroup } from "../types/wheel";
+import { FilterState } from "../types/wheel";
 import { SlidersHorizontal, Search, X, Loader2, RotateCcw } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { groupWheels } from "../features/wheels/wheelGroupAdapter";
 
-const ITEMS_PER_PAGE = 12;
+// Paliativo bom: aumenta chance de carregar variações do mesmo modelo na mesma página
+const ITEMS_PER_PAGE = 24;
 
 const CatalogPage: React.FC = () => {
   const [rawWheels, setRawWheels] = useState<any[]>([]);
@@ -26,22 +27,30 @@ const CatalogPage: React.FC = () => {
 
   const [filters, setFilters] = useState<FilterState>(() => {
     const saved = sessionStorage.getItem("mkr_filters");
-    return saved ? JSON.parse(saved) : {
-      search: "",
-      model: "",
-      size: "",
-      boltPattern: "",
-      finish: "",
-      defectType: "",
-    };
+    return saved
+      ? JSON.parse(saved)
+      : {
+        search: "",
+        model: "",
+        size: "",
+        boltPattern: "",
+        finish: "",
+        defectType: "",
+      };
   });
 
   const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
+
   const loadMoreRef = useRef<HTMLDivElement>(null);
   const pageRef = useRef(0);
   const fetchingRef = useRef(false);
 
-  // 1. MEMÓRIA DE SCROLL E FILTROS
+  // ✅ Evita “resposta atrasada” misturar dados e gerar 2 UN fantasma
+  const requestIdRef = useRef(0);
+
+  /* =========================
+     1) MEMÓRIA DE FILTROS/SCROLL
+     ========================= */
   useEffect(() => {
     sessionStorage.setItem("mkr_filters", JSON.stringify(filters));
   }, [filters]);
@@ -58,17 +67,28 @@ const CatalogPage: React.FC = () => {
     sessionStorage.setItem("mkr_catalog_scroll", window.scrollY.toString());
   };
 
+  /* =========================
+     2) OPTIONS DE FILTRO
+     ========================= */
   const loadFilterOptions = useCallback(async () => {
     try {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("individual_wheels")
         .select("model, bolt_pattern, finish");
 
+      if (error) throw error;
+
       if (data) {
         setFilterOptions({
-          models: [...new Set(data.map(r => r.model))].filter(Boolean).sort() as string[],
-          boltPatterns: [...new Set(data.map(r => r.bolt_pattern))].filter(Boolean).sort() as string[],
-          finishes: [...new Set(data.map(r => r.finish))].filter(Boolean).sort() as string[],
+          models: [...new Set(data.map((r: any) => r.model))]
+            .filter(Boolean)
+            .sort() as string[],
+          boltPatterns: [...new Set(data.map((r: any) => r.bolt_pattern))]
+            .filter(Boolean)
+            .sort() as string[],
+          finishes: [...new Set(data.map((r: any) => r.finish))]
+            .filter(Boolean)
+            .sort() as string[],
         });
       }
     } catch (e) {
@@ -76,97 +96,160 @@ const CatalogPage: React.FC = () => {
     }
   }, []);
 
-  const loadWheels = useCallback(async (isInitial = false) => {
-    if (fetchingRef.current) return;
-    fetchingRef.current = true;
+  useEffect(() => {
+    loadFilterOptions();
+  }, [loadFilterOptions]);
 
-    try {
-      if (isInitial) {
-        setLoading(true);
-        pageRef.current = 0;
-      } else {
-        setLoadingMore(true);
+  /* =========================
+     3) LOAD DO CATÁLOGO (ROBUSTO)
+     ========================= */
+  const loadWheels = useCallback(
+    async (isInitial = false) => {
+      // incrementa ID da request atual
+      const myRequestId = ++requestIdRef.current;
+
+      // bloqueia concorrência (infinite scroll)
+      if (fetchingRef.current) return;
+      fetchingRef.current = true;
+
+      try {
+        if (isInitial) {
+          setLoading(true);
+          setLoadingMore(false);
+
+          // ✅ reset total
+          pageRef.current = 0;
+          setRawWheels([]);
+          setHasMore(true);
+        } else {
+          setLoadingMore(true);
+        }
+
+        const from = pageRef.current * ITEMS_PER_PAGE;
+        const to = from + ITEMS_PER_PAGE - 1;
+
+        let query = supabase.from("individual_wheels").select("*");
+
+        if (filters.model) query = query.eq("model", filters.model);
+        if (filters.boltPattern) query = query.eq("bolt_pattern", filters.boltPattern);
+        if (filters.finish) query = query.eq("finish", filters.finish);
+        if (filters.size) query = query.ilike("size", `${filters.size}%`);
+
+        if (filters.search) {
+          query = query.or(
+            `model.ilike.%${filters.search}%,description.ilike.%${filters.search}%`
+          );
+        }
+
+        if (filters.defectType) {
+          query = query.contains("defects", [filters.defectType]);
+        }
+
+        const { data, error } = await query
+          .order("model", { ascending: true })
+          .order("finish", { ascending: true })
+          .order("id", { ascending: true }) // ✅ estabilidade para paginação
+          .range(from, to);
+
+        if (error) throw error;
+
+        // ✅ se essa resposta for atrasada (filtros mudaram no meio), ignora
+        if (myRequestId !== requestIdRef.current) return;
+
+        const rows = data ?? [];
+
+        setRawWheels((prev) => {
+          const next = isInitial ? rows : [...prev, ...rows];
+
+          // ✅ dedupe por id para evitar “2 UN” fantasma
+          const map = new Map<string, any>();
+          for (const r of next) map.set(r.id, r);
+          return Array.from(map.values());
+        });
+
+        setHasMore(rows.length === ITEMS_PER_PAGE);
+        if (rows.length > 0) pageRef.current += 1;
+      } catch (err) {
+        console.error("Erro ao carregar catálogo:", err);
+      } finally {
+        // só “desliga loading” se ainda for a request atual
+        if (myRequestId === requestIdRef.current) {
+          setLoading(false);
+          setLoadingMore(false);
+        }
+        fetchingRef.current = false;
       }
+    },
+    [filters]
+  );
 
-      const from = pageRef.current * ITEMS_PER_PAGE;
-      const to = from + ITEMS_PER_PAGE - 1;
-
-      let query = supabase.from("individual_wheels").select("*");
-
-      if (filters.model) query = query.eq('model', filters.model);
-      if (filters.boltPattern) query = query.eq('bolt_pattern', filters.boltPattern);
-      if (filters.finish) query = query.eq('finish', filters.finish);
-      if (filters.size) query = query.ilike('size', `${filters.size}%`);
-
-      if (filters.search) {
-        query = query.or(`model.ilike.%${filters.search}%,description.ilike.%${filters.search}%`);
-      }
-
-      if (filters.defectType) {
-        query = query.contains('defects', [filters.defectType]);
-      }
-
-      const { data, error } = await query
-        .order("model", { ascending: true })
-        .range(from, to);
-
-      if (error) throw error;
-
-      const rows = data ?? [];
-      setRawWheels((prev) => (isInitial ? rows : [...prev, ...rows]));
-      setHasMore(rows.length === ITEMS_PER_PAGE);
-      if (rows.length > 0) pageRef.current += 1;
-
-    } catch (err) {
-      console.error("Erro ao carregar catálogo:", err);
-    } finally {
-      setLoading(false);
-      setLoadingMore(false);
-      fetchingRef.current = false;
-    }
-  }, [filters]);
-
-  useEffect(() => { loadFilterOptions(); }, [loadFilterOptions]);
-
-  // DEBOUNCE OTIMIZADO
+  // debounce quando filtros mudam
   useEffect(() => {
     const timer = setTimeout(() => {
       loadWheels(true);
     }, 400);
     return () => clearTimeout(timer);
-  }, [filters.search, filters.model, filters.size, filters.boltPattern, filters.finish, filters.defectType]);
+  }, [
+    filters.search,
+    filters.model,
+    filters.size,
+    filters.boltPattern,
+    filters.finish,
+    filters.defectType,
+    loadWheels,
+  ]);
 
+  // infinite scroll
   useEffect(() => {
     const observer = new IntersectionObserver(
       (entries) => {
-        if (entries[0].isIntersecting && hasMore && !loadingMore && !loading) {
+        if (
+          entries[0].isIntersecting &&
+          hasMore &&
+          !loadingMore &&
+          !loading &&
+          !fetchingRef.current
+        ) {
           loadWheels(false);
         }
       },
-      { threshold: 0.1, rootMargin: '200px' }
+      { threshold: 0.1, rootMargin: "200px" }
     );
+
     if (loadMoreRef.current) observer.observe(loadMoreRef.current);
     return () => observer.disconnect();
   }, [hasMore, loadingMore, loading, loadWheels]);
 
+  /* =========================
+     4) AGRUPAMENTO
+     ========================= */
   const wheelGroups = useMemo(() => groupWheels(rawWheels), [rawWheels]);
 
+  /* =========================
+     5) UI HELPERS
+     ========================= */
   const resetFilters = () => {
-    setFilters({ search: "", model: "", size: "", boltPattern: "", finish: "", defectType: "" });
+    setFilters({
+      search: "",
+      model: "",
+      size: "",
+      boltPattern: "",
+      finish: "",
+      defectType: "",
+    });
     setIsFilterModalOpen(false);
   };
 
   const removeFilter = (key: keyof FilterState) => {
-    setFilters(prev => ({ ...prev, [key]: "" }));
+    setFilters((prev) => ({ ...prev, [key]: "" }));
   };
 
   return (
-    <div className="flex flex-col min-h-screen bg-gray-50 text-gray-900 font-sans">
+    <div className="flex flex-col min-h-screen bg-gray-50 text-gray-900 font-sans overflow-x-hidden">
       <Header />
 
       <main className="flex-grow pt-16">
         <div className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-8 flex flex-col md:flex-row gap-8">
-
           {/* SIDEBAR DESKTOP */}
           <aside className="hidden lg:block w-72 shrink-0">
             <div className="sticky top-24">
@@ -181,19 +264,22 @@ const CatalogPage: React.FC = () => {
             </div>
           </aside>
 
-          <div className="flex-grow">
-            {/* BUSCA E FILTROS MOBILE */}
+          <div className="flex-grow min-w-0">
+            {/* BUSCA + FILTROS MOBILE */}
             <div className="flex flex-col sm:flex-row gap-4 mb-6">
               <div className="relative flex-grow group">
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5 group-focus-within:text-black transition-colors" />
                 <input
                   type="text"
                   placeholder="Buscar por modelo (ex: R10)..."
-                  className="w-full pl-12 pr-4 py-4 bg-white shadow-sm border border-transparent rounded-2xl focus:border-black focus:ring-4 focus:ring-black/5 outline-none transition-all text-sm font-bold italic"
+                  className="w-full pl-12 pr-4 py-4 bg-white shadow-sm border border-transparent rounded-2xl focus:border-black outline-none transition-all text-sm font-bold italic"
                   value={filters.search}
-                  onChange={(e) => setFilters(prev => ({ ...prev, search: e.target.value }))}
+                  onChange={(e) =>
+                    setFilters((prev) => ({ ...prev, search: e.target.value }))
+                  }
                 />
               </div>
+
               <button
                 onClick={() => setIsFilterModalOpen(true)}
                 className="lg:hidden flex items-center justify-center gap-3 px-8 py-4 bg-white shadow-sm rounded-2xl text-xs font-black uppercase tracking-widest border border-gray-100 active:scale-95 transition-all"
@@ -202,10 +288,10 @@ const CatalogPage: React.FC = () => {
               </button>
             </div>
 
-            {/* CHIPS DE FILTROS ATIVOS */}
+            {/* CHIPS DE FILTRO */}
             <div className="flex flex-wrap items-center gap-2 mb-8">
               {Object.entries(filters).map(([key, value]) => {
-                if (key === 'search' || !value) return null;
+                if (key === "search" || !value) return null;
                 return (
                   <button
                     key={key}
@@ -217,50 +303,73 @@ const CatalogPage: React.FC = () => {
                   </button>
                 );
               })}
-              {Object.values(filters).some(v => v !== "") && (
-                <button onClick={resetFilters} className="text-[10px] font-black uppercase text-gray-400 hover:text-black flex items-center gap-1 ml-2 transition-colors">
+
+              {Object.values(filters).some((v) => v !== "") && (
+                <button
+                  onClick={resetFilters}
+                  className="text-[10px] font-black uppercase text-gray-400 hover:text-black flex items-center gap-1 ml-2 transition-colors"
+                >
                   <RotateCcw size={12} /> Limpar
                 </button>
               )}
             </div>
 
-            {/* GRID DE RESULTADOS */}
+            {/* GRID */}
             {loading ? (
-              <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-6">
-                {[...Array(8)].map((_, i) => <WheelCardSkeleton key={i} />)}
+              <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
+                {[...Array(8)].map((_, i) => (
+                  <WheelCardSkeleton key={i} />
+                ))}
               </div>
             ) : (
-              <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-6">
+              <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
                 {wheelGroups.map((group) => (
                   <Link
-                    key={group.id}
+                    key={group.id} // ✅ key estável
                     to={`/roda/${group.wheels[0].id}`}
                     onClick={handleWheelClick}
                     className="group"
                   >
+                    {/* WheelCard ainda usa o click interno, mas aqui já navega pelo Link */}
                     <WheelCard group={group} onClick={() => { }} />
                   </Link>
                 ))}
               </div>
             )}
 
-            {/* INFINITE SCROLL FEEDBACK */}
-            <div ref={loadMoreRef} className="py-20 flex flex-col items-center justify-center min-h-[200px]">
+            {/* INFINITE SCROLL */}
+            <div
+              ref={loadMoreRef}
+              className="py-20 flex flex-col items-center justify-center min-h-[200px]"
+            >
               {loadingMore && (
                 <div className="flex flex-col items-center gap-3">
                   <Loader2 className="w-10 h-10 animate-spin text-black" />
-                  <p className="text-[10px] font-black uppercase tracking-[0.3em] text-gray-400">Carregando mais</p>
+                  <p className="text-[10px] font-black uppercase tracking-[0.3em] text-gray-400">
+                    Carregando mais
+                  </p>
                 </div>
               )}
+
               {!hasMore && !loading && wheelGroups.length > 0 && (
                 <div className="h-[2px] w-24 bg-gray-200 relative">
-                  <span className="absolute left-1/2 -translate-x-1/2 -top-2 bg-gray-50 px-4 text-[10px] font-black uppercase text-gray-300">Fim</span>
+                  <span className="absolute left-1/2 -translate-x-1/2 -top-2 bg-gray-50 px-4 text-[10px] font-black uppercase text-gray-300">
+                    Fim
+                  </span>
                 </div>
               )}
+
               {!loading && wheelGroups.length === 0 && (
                 <div className="text-center py-20 animate-in fade-in">
-                  <p className="text-2xl font-black italic text-gray-300 uppercase mb-2">Nenhum resultado</p>
-                  <button onClick={resetFilters} className="text-blue-600 font-black uppercase text-[10px] tracking-widest hover:underline">Resetar filtros</button>
+                  <p className="text-2xl font-black italic text-gray-300 uppercase mb-2">
+                    Nenhum resultado
+                  </p>
+                  <button
+                    onClick={resetFilters}
+                    className="text-blue-600 font-black uppercase text-[10px] tracking-widest hover:underline"
+                  >
+                    Resetar filtros
+                  </button>
                 </div>
               )}
             </div>
@@ -272,9 +381,17 @@ const CatalogPage: React.FC = () => {
       {isFilterModalOpen && (
         <div className="fixed inset-0 z-[110] bg-white p-6 lg:hidden flex flex-col animate-in slide-in-from-bottom">
           <div className="flex justify-between items-center mb-10">
-            <h2 className="font-black uppercase italic text-3xl tracking-tighter">Filtros</h2>
-            <button onClick={() => setIsFilterModalOpen(false)} className="p-2 bg-gray-100 rounded-full"><X size={24} /></button>
+            <h2 className="font-black uppercase italic text-3xl tracking-tighter">
+              Filtros
+            </h2>
+            <button
+              onClick={() => setIsFilterModalOpen(false)}
+              className="p-2 bg-gray-100 rounded-full"
+            >
+              <X size={24} />
+            </button>
           </div>
+
           <div className="flex-grow overflow-y-auto pr-2">
             <FilterSidebar
               filters={filters}
@@ -285,6 +402,7 @@ const CatalogPage: React.FC = () => {
               finishes={filterOptions.finishes}
             />
           </div>
+
           <button
             onClick={() => setIsFilterModalOpen(false)}
             className="w-full bg-black text-white py-6 rounded-2xl font-black uppercase text-sm tracking-widest mt-6 shadow-2xl active:scale-95 transition-transform"
@@ -293,12 +411,13 @@ const CatalogPage: React.FC = () => {
           </button>
         </div>
       )}
+
       <Footer />
     </div>
   );
 };
 
-// SKELETON COMPONENT
+// SKELETON
 const WheelCardSkeleton = () => (
   <div className="bg-white p-4 rounded-[2.5rem] border border-gray-100 shadow-sm space-y-4">
     <div className="aspect-square bg-gray-100 rounded-[2rem] animate-pulse" />

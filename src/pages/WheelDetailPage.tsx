@@ -23,14 +23,14 @@ const WheelDetailPage: React.FC = () => {
   const [headerHeight, setHeaderHeight] = useState(80);
 
   /* ============================================================
-     1. RESET DE SCROLL (Abre a página no topo)
+     1. RESET DE SCROLL
      ============================================================ */
   useEffect(() => {
     window.scrollTo(0, 0);
   }, [id]);
 
   /* ============================================================
-     2. BUSCA DE DADOS (SUPABASE)
+     2. BUSCA DE DADOS (SUPABASE) - CORREÇÃO DE AGRUPAMENTO POR COR
      ============================================================ */
   useEffect(() => {
     async function fetchWheelData() {
@@ -40,6 +40,7 @@ const WheelDetailPage: React.FC = () => {
         setLoading(true);
         setError(null);
 
+        // 1. Busca a unidade específica de referência pelo ID
         const { data: refWheel, error: refError } = await supabase
           .from("individual_wheels")
           .select("*")
@@ -49,18 +50,25 @@ const WheelDetailPage: React.FC = () => {
         if (refError) throw new Error("Não encontramos esta unidade específica.");
 
         if (refWheel) {
+          // 2. Busca TODAS as unidades do mesmo modelo/aro/furação
           const { data: allUnits, error: allUnitsError } = await supabase
             .from("individual_wheels")
             .select("*")
             .eq("model", refWheel.model)
             .eq("size", refWheel.size)
-            .eq("bolt_pattern", refWheel.bolt_pattern)
-            .eq("finish", refWheel.finish);
+            .eq("bolt_pattern", refWheel.bolt_pattern);
 
           if (allUnitsError) throw allUnitsError;
 
           if (allUnits && allUnits.length > 0) {
-            const groups = groupWheels(allUnits);
+            // 3. FILTRO MANUAL: Resolve o bug de estoque misturado
+            // Filtramos apenas as unidades que possuem o MESMO acabamento (cor) da roda clicada
+            const sameFinishUnits = allUnits.filter(
+              (w) => w.finish === refWheel.finish
+            );
+
+            // O adaptador agora recebe apenas rodas da mesma cor, isolando o estoque
+            const groups = groupWheels(sameFinishUnits);
             setGroup(groups[0]);
           }
         }
@@ -75,7 +83,7 @@ const WheelDetailPage: React.FC = () => {
   }, [id]);
 
   /* ============================================================
-     3. MONITORAMENTO DE SCROLL (BOTÕES FLUTUANTES)
+     3. MONITORAMENTO DE SCROLL
      ============================================================ */
   useEffect(() => {
     const handleScroll = () => {
@@ -94,7 +102,7 @@ const WheelDetailPage: React.FC = () => {
   }, []);
 
   return (
-    // Adicionado overflow-x-hidden para evitar o scroll lateral em dispositivos móveis
+    // overflow-x-hidden adicionado para evitar scroll lateral no mobile
     <div className="flex flex-col min-h-screen bg-white text-gray-900 relative overflow-x-hidden">
       <Header />
 
@@ -149,7 +157,6 @@ const WheelDetailPage: React.FC = () => {
             </button>
           </div>
         ) : (
-          /* O componente WheelDetail também deve ter classes break-words em seus textos internos */
           <WheelDetail group={group} onBack={() => navigate(-1)} />
         )}
       </main>

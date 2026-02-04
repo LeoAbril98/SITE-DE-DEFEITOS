@@ -24,8 +24,8 @@ const WheelCard: React.FC<WheelCardProps> = ({ group, onClick }) => {
     ? `/modelos/${folder}/${finishFileName}`
     : `/modelos/${folder}/CAPA.jpg`;
 
-  const realPhotoFallback = group.wheels[0]?.photos?.[0] 
-    ? optimizeThumb(group.wheels[0].photos[0], 400) 
+  const realPhotoFallback = group.wheels[0]?.photos?.[0]
+    ? optimizeThumb(group.wheels[0].photos[0], 400)
     : null;
 
   const emptyPlaceholder = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='400' viewBox='0 0 400 400'%3E%3Crect width='400' height='400' fill='%23eeeeee'/%3E%3Ctext x='50%25' y='50%25' font-family='sans-serif' font-size='20' fill='%23999999' text-anchor='middle' dy='.3em'%3ESem Foto%3C/text%3E%3C/svg%3E";
@@ -36,9 +36,9 @@ const WheelCard: React.FC<WheelCardProps> = ({ group, onClick }) => {
   return (
     <div
       onClick={() => onClick(group.wheels[0].id)}
-      className="group bg-white rounded-2xl border border-gray-100 overflow-hidden hover:shadow-xl hover:border-black/10 transition-all duration-300 cursor-pointer flex flex-col h-full"
+      className="group bg-white rounded-2xl border border-gray-100 overflow-hidden hover:shadow-xl hover:border-black/10 transition-all duration-300 cursor-pointer flex flex-col h-full w-full"
     >
-      {/* AREA DA IMAGEM - VOLTOU AO ORIGINAL */}
+      {/* AREA DA IMAGEM */}
       <div className="aspect-square bg-gray-50 overflow-hidden relative">
         <img
           src={catalogUrl}
@@ -77,14 +77,14 @@ const WheelCard: React.FC<WheelCardProps> = ({ group, onClick }) => {
         </div>
       </div>
 
-      {/* INFO DO CARD - UNIDADES AGORA DEPOIS DO MODELO */}
-      <div className="p-6 flex flex-col flex-grow">
+      {/* INFO DO CARD - Ajustado com min-w-0 para evitar overflow */}
+      <div className="p-6 flex flex-col flex-grow min-w-0">
         <span className="text-[11px] text-gray-400 uppercase tracking-[0.15em] font-black mb-1.5">
           {group.brand}
         </span>
 
-        <div className="flex items-center justify-between gap-2 mb-1">
-          <h3 className="font-black text-gray-900 text-xl uppercase tracking-tighter leading-tight">
+        <div className="flex items-center justify-between gap-2 mb-1 min-w-0">
+          <h3 className="font-black text-gray-900 text-xl uppercase tracking-tighter leading-tight truncate">
             {group.model}
           </h3>
           {group.quantity > 1 && (
@@ -94,7 +94,8 @@ const WheelCard: React.FC<WheelCardProps> = ({ group, onClick }) => {
           )}
         </div>
 
-        <p className="text-[13px] font-black text-blue-600 uppercase mb-2 tracking-tight">
+        {/* ✅ ACABAMENTO: break-words e leading-tight para suportar nomes longos no mobile */}
+        <p className="text-[13px] font-black text-blue-600 uppercase mb-2 tracking-tight break-words leading-tight">
           {group.finish}
         </p>
 
