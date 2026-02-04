@@ -1,43 +1,54 @@
 import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { supabase } from "../lib/supabase"; 
+import { supabase } from "../lib/supabase";
 import { groupWheels } from "../features/wheels/wheelGroupAdapter";
 import WheelDetail from "../features/wheels/WheelDetail";
 import Header from "../components/layout/Header";
 import Footer from "../components/layout/Footer";
-import { Loader2, AlertCircle } from "lucide-react";
+import { Loader2, AlertCircle, ChevronLeft, ChevronUp } from "lucide-react";
+
+const SCROLL_THRESHOLD = 250;
 
 const WheelDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+
+  // Estados de Dados
   const [group, setGroup] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Estados de Interface
+  const [showFloatingElements, setShowFloatingElements] = useState(false);
+  const [headerHeight, setHeaderHeight] = useState(80);
+
+  /* ============================================================
+     1. RESET DE SCROLL (Abre a página no topo)
+     ============================================================ */
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [id]);
+
+  /* ============================================================
+     2. BUSCA DE DADOS (SUPABASE)
+     ============================================================ */
   useEffect(() => {
     async function fetchWheelData() {
       if (!id) return;
-      
+
       try {
         setLoading(true);
         setError(null);
 
-        // 1. Busca a roda específica pelo UUID único enviado pelo catálogo
-        // Como o ID agora é um UUID válido, o Supabase não retornará erro de sintaxe
         const { data: refWheel, error: refError } = await supabase
           .from("individual_wheels")
           .select("*")
-          .eq("id", id) 
+          .eq("id", id)
           .single();
 
-        if (refError) {
-          console.error("Erro ao buscar referência UUID:", refError);
-          throw new Error("Não encontramos esta unidade específica.");
-        }
+        if (refError) throw new Error("Não encontramos esta unidade específica.");
 
         if (refWheel) {
-          // 2. Busca todas as unidades "irmãs" com a mesma configuração técnica
-          // Isso garante que se houver 4 rodas do mesmo jogo, todas apareçam aqui
           const { data: allUnits, error: allUnitsError } = await supabase
             .from("individual_wheels")
             .select("*")
@@ -49,13 +60,11 @@ const WheelDetailPage: React.FC = () => {
           if (allUnitsError) throw allUnitsError;
 
           if (allUnits && allUnits.length > 0) {
-            // Agrupa as unidades para o formato de exibição do componente WheelDetail
             const groups = groupWheels(allUnits);
             setGroup(groups[0]);
           }
         }
       } catch (err: any) {
-        console.error("Falha no carregamento dos detalhes:", err);
         setError(err.message);
       } finally {
         setLoading(false);
@@ -65,9 +74,60 @@ const WheelDetailPage: React.FC = () => {
     fetchWheelData();
   }, [id]);
 
+  /* ============================================================
+     3. MONITORAMENTO DE SCROLL (BOTÕES FLUTUANTES)
+     ============================================================ */
+  useEffect(() => {
+    const handleScroll = () => {
+      setShowFloatingElements(window.scrollY > SCROLL_THRESHOLD);
+
+      const headerEl = document.querySelector('header');
+      if (headerEl) {
+        setHeaderHeight(headerEl.getBoundingClientRect().height);
+      }
+    };
+
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    handleScroll();
+
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
   return (
-    <div className="flex flex-col min-h-screen bg-white text-gray-900">
+    <div className="flex flex-col min-h-screen bg-white text-gray-900 relative">
       <Header />
+
+      {/* BOTÃO VOLTAR FLUTUANTE */}
+      {showFloatingElements && !loading && !error && (
+        <div
+          className="fixed left-4 sm:left-8 z-[60] transition-all duration-300 animate-in slide-in-from-left-5"
+          style={{ top: `${headerHeight + 20}px` }}
+        >
+          <button
+            onClick={() => navigate(-1)}
+            className="group flex items-center gap-2 px-5 py-3 rounded-2xl bg-white/90 backdrop-blur-md border border-gray-200 shadow-2xl hover:bg-white transition-all active:scale-95"
+          >
+            <ChevronLeft className="w-5 h-5 transition-transform group-hover:-translate-x-1" />
+            <span className="text-xs font-black uppercase tracking-widest text-gray-900">
+              Voltar
+            </span>
+          </button>
+        </div>
+      )}
+
+      {/* BOTÃO VOLTAR AO TOPO */}
+      {showFloatingElements && !loading && !error && (
+        <div className="fixed right-4 sm:right-8 bottom-8 z-[60] animate-in fade-in zoom-in duration-300">
+          <button
+            onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+            className="group p-4 rounded-2xl bg-black text-white shadow-[0_20px_40px_rgba(0,0,0,0.3)] hover:bg-gray-800 transition-all active:scale-90 border border-white/10"
+            aria-label="Voltar ao topo"
+          >
+            <ChevronUp className="w-6 h-6 group-hover:-translate-y-1 transition-transform" />
+          </button>
+        </div>
+      )}
+
       <main className="flex-grow pt-16">
         {loading ? (
           <div className="flex flex-col items-center justify-center h-[70vh] gap-4">
@@ -80,12 +140,9 @@ const WheelDetailPage: React.FC = () => {
           <div className="flex flex-col items-center justify-center h-[70vh] px-4 text-center">
             <AlertCircle className="w-16 h-16 text-red-500 mb-4" />
             <h2 className="text-2xl font-black uppercase italic mb-2">Inspeção não encontrada</h2>
-            <p className="text-gray-400 mb-8 max-w-xs text-sm font-medium">
-              {error || "Não foi possível carregar os dados desta roda."}
-            </p>
-            <button 
-              onClick={() => navigate("/")} 
-              className="bg-black text-white px-10 py-4 rounded-2xl font-black uppercase text-xs tracking-widest shadow-lg active:scale-95 transition-transform"
+            <button
+              onClick={() => navigate("/")}
+              className="bg-black text-white px-10 py-4 rounded-2xl font-black uppercase text-xs tracking-widest mt-4"
             >
               Voltar ao catálogo
             </button>
@@ -94,6 +151,7 @@ const WheelDetailPage: React.FC = () => {
           <WheelDetail group={group} onBack={() => navigate(-1)} />
         )}
       </main>
+
       <Footer />
     </div>
   );

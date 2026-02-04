@@ -1,10 +1,15 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useMemo, useState } from "react";
 import { WheelGroup, IndividualWheel } from "../../types/wheel";
 import {
-  ChevronLeft,
   Share2,
   CameraOff,
   Video,
+  ChevronLeft,
+  Download,
+  X,
+  CheckCircle2,
+  Copy,
+  Loader2
 } from "lucide-react";
 import { resolveFinishImage } from "../../utils/finishResolver";
 
@@ -13,106 +18,122 @@ interface WheelDetailProps {
   onBack: () => void;
 }
 
-const optimizeMedia = (url: string, width?: number) => {
+// 1. Otimização de Imagens e Thumbnails de Vídeo (Cloudinary)
+const optimizeMedia = (url: string, width?: number, isPoster?: boolean) => {
   if (!url || !url.includes("cloudinary.com")) return url;
+
+  if (url.includes('/video/upload/') && isPoster) {
+    return url.replace('/video/upload/', '/video/upload/f_auto,q_auto,so_0/').replace('.mp4', '.jpg');
+  }
+
   if (url.includes('/video/upload/')) {
     return url.replace('/video/upload/', '/video/upload/f_auto,q_auto/');
   }
+
   const params = `f_auto,q_auto${width ? `,w_${width}` : ''}`;
   return url.replace('/upload/', `/upload/${params}/`);
 };
 
 const WheelDetail: React.FC<WheelDetailProps> = ({ group, onBack }) => {
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedItem, setSelectedItem] = useState<{ item: IndividualWheel, index: number } | null>(null);
+  const [downloadStatus, setDownloadStatus] = useState({ active: false, current: 0, total: 0 });
+
   const folder = group.model.toLowerCase().trim().replace(/\s+/g, "");
   const finishFileName = resolveFinishImage(group.finish);
-  const catalogUrl = finishFileName
-    ? `/modelos/${folder}/${finishFileName}`
-    : `/modelos/${folder}/CAPA.jpg`;
+  const catalogUrl = finishFileName ? `/modelos/${folder}/${finishFileName}` : `/modelos/${folder}/CAPA.jpg`;
 
-  const handleShareImages = async (item: IndividualWheel, index: number) => {
-    const currentUrl = window.location.href; // Link da página atual
-    const message =
-      `*RELATÓRIO TÉCNICO – MKR RODAS*\n\n` +
-      `*Modelo:* ${group.model}\n` +
-      `*Unidade:* #${index + 1}\n` +
-      `*Aro:* ${group.size}\n` +
-      `*Furação:* ${group.boltPattern}\n` +
-      `*Acabamento:* ${group.finish}\n\n` +
-      `*Link da Inspeção:* ${currentUrl}\n\n` +
-      `*Mídias anexas:* Fotos e vídeos da inspeção abaixo:`;
+  const getTechnicalMessage = (index: number) => {
+    const currentUrl = window.location.href;
+    const technicalInfo = `${group.model} ${group.size} ${group.boltPattern || group.bolt_pattern} ${group.finish}`;
+    return `*MKR RODAS - RELATÓRIO TÉCNICO*\n\n${technicalInfo.toUpperCase()}\n*Unidade:* #${index + 1}\n\n🔗 *Link:* ${currentUrl}`;
+  };
+
+  const handleShareClick = (item: IndividualWheel, index: number) => {
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    if (isMobile) {
+      executeShare(item, index, true);
+    } else {
+      setSelectedItem({ item, index });
+      setIsModalOpen(true);
+    }
+  };
+
+  const copyToClipboard = (index: number) => {
+    navigator.clipboard.writeText(getTechnicalMessage(index));
+    alert("Texto técnico copiado!");
+  };
+
+  const executeShare = async (item: IndividualWheel, index: number, isMobile: boolean) => {
+    const allMedia = [...(item.photos || []), ...(item.video_url ? [item.video_url] : [])];
+    setDownloadStatus({ active: true, current: 0, total: allMedia.length });
 
     try {
-      const filesArray: File[] = [];
-
-      const urlToFile = async (url: string, fileName: string, mimeType: string) => {
-        const optimizedUrl = optimizeMedia(url, 1200); 
-        const response = await fetch(optimizedUrl);
-        if (!response.ok) throw new Error("Falha ao baixar arquivo");
-        const data = await response.blob();
-        return new File([data], fileName, { type: mimeType });
-      };
-
-      if (item.photos && item.photos.length > 0) {
-        const photoFiles = await Promise.all(
-          item.photos.map((url, i) => urlToFile(url, `roda_foto_${i + 1}.jpg`, "image/jpeg"))
-        );
-        filesArray.push(...photoFiles);
-      }
-
-      if (item.video_url) {
-        const videoFile = await urlToFile(item.video_url, `inspecao.mp4`, "video/mp4");
-        filesArray.push(videoFile);
-      }
-
-      if (navigator.canShare && navigator.canShare({ files: filesArray })) {
-        await navigator.share({
-          files: filesArray,
-          title: `Relatório - ${group.model}`,
-          text: message,
-        });
+      if (!isMobile) {
+        for (let i = 0; i < allMedia.length; i++) {
+          setDownloadStatus(prev => ({ ...prev, current: i + 1 }));
+          const response = await fetch(optimizeMedia(allMedia[i], 1200));
+          const blob = await response.blob();
+          const blobUrl = window.URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = blobUrl;
+          link.download = `mkr_${group.model}_un_${index + 1}_media_${i + 1}.${allMedia[i].includes('video') ? 'mp4' : 'jpg'}`;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          window.URL.revokeObjectURL(blobUrl);
+          await new Promise(r => setTimeout(r, 600));
+        }
       } else {
-        window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, "_blank");
+        if (allMedia.length > 0 && navigator.share) {
+          const response = await fetch(optimizeMedia(allMedia[0], 800));
+          const file = new File([await response.blob()], "inspecao.jpg", { type: "image/jpeg" });
+          await navigator.share({ files: [file], text: getTechnicalMessage(index) });
+          setDownloadStatus({ active: false, current: 0, total: 0 });
+          return;
+        }
       }
+
+      window.open(`https://wa.me/?text=${encodeURIComponent(getTechnicalMessage(index))}`, "_blank");
+      setIsModalOpen(false);
     } catch (err) {
-      console.error("Erro no compartilhamento:", err);
+      console.error(err);
+    } finally {
+      setDownloadStatus({ active: false, current: 0, total: 0 });
     }
   };
 
   return (
-    <div className="relative max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-in fade-in duration-500 bg-white">
+    <div className="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-in fade-in bg-white text-gray-900 font-sans">
       <button onClick={onBack} className="flex items-center gap-2 text-sm font-black uppercase text-gray-400 hover:text-black mb-8 transition-colors">
         <ChevronLeft className="w-4 h-4" /> Voltar ao catálogo
       </button>
 
+      {/* HEADER PRINCIPAL CORRIGIDO */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-12 border-b-4 border-gray-50 pb-12">
         <div className="flex items-start gap-6">
-          <div className="w-20 h-20 md:w-28 md:h-28 rounded-2xl overflow-hidden border-2 border-gray-100 flex-shrink-0 shadow-sm bg-gray-50 mt-1">
+          <div className="w-20 h-20 md:w-28 md:h-28 rounded-2xl overflow-hidden border-2 border-gray-100 shadow-sm bg-gray-50 flex-shrink-0">
             <img
               src={catalogUrl}
               className="w-full h-full object-cover"
+              alt={group.model}
               onError={(e) => {
                 const target = e.target as HTMLImageElement;
-                target.src = optimizeMedia(group.wheels[0]?.photos?.[0] || "", 400);
+                // LÓGICA DE FALLBACK: Se não tiver foto de capa, usa a primeira foto da roda
+                const fallbackUrl = group.wheels[0]?.photos?.[0];
+                if (fallbackUrl) {
+                  target.src = optimizeMedia(fallbackUrl, 400);
+                }
               }}
-              alt={group.model}
             />
           </div>
           <div>
-            <span className="text-[14px] font-black text-blue-600 uppercase tracking-[0.2em] block mb-2">{group.brand}</span>
-            <h1 className="text-4xl md:text-7xl font-black italic tracking-tighter mb-8 text-gray-900 uppercase leading-none">{group.model}</h1>
-            <div className="flex flex-wrap items-center gap-10">
-              <div className="flex flex-col">
-                <span className="text-[11px] font-black text-gray-400 uppercase tracking-widest mb-1">Aro</span>
-                <span className="text-2xl font-black text-gray-900 uppercase italic">{group.size}</span>
-              </div>
-              <div className="flex flex-col">
-                <span className="text-[11px] font-black text-gray-400 uppercase tracking-widest mb-1">Furação</span>
-                <span className="text-2xl font-black text-gray-900 uppercase italic">{group.boltPattern}</span>
-              </div>
-              <div className="flex flex-col">
-                <span className="text-[11px] font-black text-gray-400 uppercase tracking-widest mb-1">Acabamento</span>
-                <span className="text-2xl font-black text-gray-900 uppercase italic">{group.finish}</span>
-              </div>
+            <span className="text-blue-600 font-black uppercase text-xs tracking-[0.2em] block mb-2">{group.brand}</span>
+            <h1 className="text-4xl md:text-7xl font-black italic uppercase text-gray-900 leading-none tracking-tighter">{group.model}</h1>
+            <div className="flex gap-10 mt-6">
+              <div className="flex flex-col text-gray-900"><span className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Aro</span><span className="text-2xl font-black italic uppercase">{group.size}</span></div>
+              <div className="flex flex-col text-gray-900"><span className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Furação</span><span className="text-2xl font-black italic uppercase">{group.boltPattern || group.bolt_pattern}</span></div>
+              <div className="flex flex-col text-gray-900"><span className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Acabamento</span><span className="text-2xl font-black italic uppercase">{group.finish}</span></div>
             </div>
           </div>
         </div>
@@ -120,97 +141,89 @@ const WheelDetail: React.FC<WheelDetailProps> = ({ group, onBack }) => {
 
       <div className="space-y-32">
         {group.wheels.map((item, index) => (
-          <IndividualWheelCard
-            key={item.id}
-            item={item}
-            index={index}
-            onShare={() => handleShareImages(item, index)}
-          />
+          <IndividualWheelCard key={item.id} item={item} index={index} onShare={() => handleShareClick(item, index)} />
         ))}
       </div>
+
+      {/* MODAL PC PREMIUM */}
+      {isModalOpen && selectedItem && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white w-full max-w-md rounded-[2.5rem] p-8 shadow-2xl relative animate-in zoom-in">
+            <button onClick={() => setIsModalOpen(false)} className="absolute top-6 right-6 text-gray-400 hover:text-black">
+              <X size={24} />
+            </button>
+            <div className="text-center space-y-6">
+              <div className="w-20 h-20 bg-blue-50 rounded-full flex items-center justify-center mx-auto">
+                <Share2 className="text-blue-600 w-10 h-10" />
+              </div>
+              <h2 className="text-2xl font-black uppercase italic tracking-tight text-gray-900">Preparar Relatório</h2>
+              <div className="space-y-4 text-left bg-gray-50 p-6 rounded-3xl border border-gray-100">
+                <div className="flex gap-3 items-start"><CheckCircle2 className="text-green-500 shrink-0 w-5 h-5" /><p className="text-gray-600 font-bold italic text-sm text-gray-900">Download automático de todas as fotos e vídeos.</p></div>
+                <div className="flex gap-3 items-start"><CheckCircle2 className="text-green-500 shrink-0 w-5 h-5" /><p className="text-gray-600 font-bold italic text-sm text-gray-900">Mensagem técnica formatada para o WhatsApp.</p></div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-3">
+                <button
+                  disabled={downloadStatus.active}
+                  onClick={() => executeShare(selectedItem.item, selectedItem.index, false)}
+                  className={`py-6 rounded-2xl font-black uppercase text-sm tracking-widest flex items-center justify-center gap-3 transition-all ${downloadStatus.active ? "bg-blue-600 text-white" : "bg-black text-white hover:bg-gray-800 shadow-xl"}`}
+                >
+                  {downloadStatus.active ? <Loader2 className="animate-spin" size={20} /> : <Download size={20} />}
+                  {downloadStatus.active ? `Baixando (${downloadStatus.current}/${downloadStatus.total})` : "Gerar e Baixar Tudo"}
+                </button>
+
+                <button
+                  onClick={() => copyToClipboard(selectedItem.index)}
+                  className="py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest border-2 border-gray-100 text-gray-400 hover:text-black hover:border-black transition-all flex items-center justify-center gap-2"
+                >
+                  <Copy size={14} /> Copiar Apenas Texto Técnico
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
 
-const IndividualWheelCard: React.FC<{
-  item: IndividualWheel;
-  index: number;
-  onShare: () => void;
-}> = ({ item, index, onShare }) => {
+const IndividualWheelCard: React.FC<{ item: IndividualWheel; index: number; onShare: () => void }> = ({ item, index, onShare }) => {
   const photos = item.photos || [];
-  const videoUrl = item.video_url;
-  const mediaList = useMemo(() => [
-    ...photos.map((url) => ({ type: "image" as const, url })),
-    ...(videoUrl ? [{ type: "video" as const, url: videoUrl }] : []),
-  ], [photos, videoUrl]);
-
-  const [activeIndex, setActiveIndex] = useState(0);
-  const [mediaLoading, setMediaLoading] = useState(true);
+  const mediaList = useMemo(() => [...photos.map(u => ({ type: "image" as const, url: u })), ...(item.video_url ? [{ type: "video" as const, url: item.video_url }] : [])], [photos, item.video_url]);
+  const [active, setActive] = useState(0);
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-start pb-20 border-b border-gray-50 last:border-0">
+    <div className="grid lg:grid-cols-2 gap-16 items-start border-b border-gray-50 pb-20 last:border-0">
       <div className="space-y-6">
-        <div className="aspect-square bg-white rounded-[3rem] overflow-hidden relative border-2 border-gray-100 shadow-sm flex items-center justify-center">
+        <div className="aspect-square bg-white rounded-[3rem] overflow-hidden border-2 border-gray-100 shadow-sm relative flex items-center justify-center">
           {mediaList.length > 0 ? (
-            mediaList[activeIndex].type === "video" ? (
+            mediaList[active].type === "video" ? (
               <video
-                key={mediaList[activeIndex].url}
-                src={optimizeMedia(mediaList[activeIndex].url)}
+                src={optimizeMedia(mediaList[active].url)}
+                poster={optimizeMedia(mediaList[active].url, 1000, true)}
                 controls autoPlay muted playsInline
-                onLoadedData={() => setMediaLoading(false)}
-                className={`w-full h-full object-cover ${mediaLoading ? "opacity-0" : "opacity-100"}`}
+                className="w-full h-full object-cover"
               />
             ) : (
-              <img
-                key={mediaList[activeIndex].url}
-                src={optimizeMedia(mediaList[activeIndex].url, 1200)}
-                onLoad={() => setMediaLoading(false)}
-                className={`w-full h-full object-cover ${mediaLoading ? "opacity-0" : "opacity-100"}`}
-                alt={`Unidade ${index + 1}`}
-              />
+              <img src={optimizeMedia(mediaList[active].url, 1200)} className="w-full h-full object-cover" alt="" />
             )
-          ) : (
-            <div className="flex flex-col items-center text-gray-200 gap-4">
-              <CameraOff size={60} />
-              <span className="text-xs font-black uppercase tracking-widest">Sem mídia</span>
-            </div>
-          )}
+          ) : <CameraOff size={60} className="text-gray-200" />}
         </div>
-
         <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide">
-          {mediaList.map((media, i) => (
-            <button
-              key={i}
-              onClick={() => { setMediaLoading(true); setActiveIndex(i); }}
-              className={`min-w-[110px] h-[110px] rounded-[1.5rem] overflow-hidden border-4 transition-all ${activeIndex === i ? "border-blue-600 scale-105" : "border-white opacity-40"}`}
-            >
-              {media.type === "video" ? (
-                <div className="w-full h-full bg-blue-50 flex items-center justify-center"><Video className="text-blue-600" /></div>
-              ) : (
-                <img src={optimizeMedia(media.url, 200)} className="w-full h-full object-cover" />
-              )}
+          {mediaList.map((m, i) => (
+            <button key={i} onClick={() => setActive(i)} className={`min-w-[110px] h-[110px] rounded-[1.5rem] overflow-hidden border-4 transition-all ${active === i ? "border-blue-600 scale-105 shadow-md" : "border-white opacity-40 hover:opacity-70"}`}>
+              {m.type === "video" ? <div className="w-full h-full bg-blue-50 flex items-center justify-center"><Video className="text-blue-600" /></div> : <img src={optimizeMedia(m.url, 200)} className="w-full h-full object-cover" />}
             </button>
           ))}
         </div>
       </div>
-
       <div className="flex flex-col h-full justify-between pt-4">
         <div className="space-y-12">
-          <h3 className="text-6xl font-black italic tracking-tighter text-gray-900 uppercase leading-none">UNIDADE #{index + 1}</h3>
-          <div>
-            <label className="text-[12px] font-black text-blue-600 uppercase tracking-[0.25em] block mb-5">Avarias Detectadas</label>
-            <div className="flex flex-wrap gap-3">
-              {item.defects.map((d) => (
-                <span key={d} className="px-6 py-3 bg-red-600 text-white text-[13px] font-black uppercase rounded-2xl shadow-xl">{d}</span>
-              ))}
-            </div>
-          </div>
-          <div className="bg-gray-50/50 p-10 rounded-[2.5rem] border-2 border-gray-100">
-            <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest block mb-4">Relatório</label>
-            <p className="text-gray-800 leading-relaxed text-2xl font-bold italic">"{item.description || "Inspecionada."}"</p>
-          </div>
+          <h3 className="text-6xl font-black italic uppercase leading-none tracking-tighter text-gray-900">Unidade #{index + 1}</h3>
+          <div className="flex flex-wrap gap-3">{item.defects.map(d => <span key={d} className="px-6 py-3 bg-red-600 text-white text-[13px] font-black uppercase rounded-2xl shadow-lg">{d}</span>)}</div>
+          <div className="bg-gray-50/50 p-10 rounded-[2.5rem] border-2 border-gray-100 italic font-bold text-2xl text-gray-800 leading-relaxed">"{item.description || "Inspecionada conforme padrão MKR."}"</div>
         </div>
-        <button onClick={onShare} className="mt-16 w-full bg-[#25D366] text-white py-7 rounded-[2rem] font-black uppercase text-xl flex items-center justify-center gap-5 shadow-2xl transition-all hover:scale-[1.02]">
+        <button onClick={onShare} className="mt-16 w-full bg-[#25D366] text-white py-7 rounded-[2rem] font-black uppercase text-xl flex items-center justify-center gap-5 shadow-2xl transition-all hover:translate-y-[-2px] active:scale-95">
           <Share2 size={32} /> Compartilhar Relatório
         </button>
       </div>
