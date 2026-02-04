@@ -95,7 +95,7 @@ const AdminPage: React.FC = () => {
     return (
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8 min-h-screen bg-white font-sans">
 
-            {/* HEADER */}
+            {/* HEADER  */}
             <div className={`flex flex-col lg:flex-row lg:items-center justify-between gap-6 mb-8 p-8 rounded-[2.5rem] text-white shadow-2xl transition-all duration-500 ${showTrash ? 'bg-red-950' : 'bg-gray-900'}`}>
                 <div className="flex items-center gap-5">
                     <div className="p-4 bg-white/10 backdrop-blur-md rounded-3xl border border-white/10">
