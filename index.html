@@ -7,8 +7,7 @@
             name="viewport"
             content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
         />
-
-        <title>MKR Rodas - Catálogo</title>
+        <title>MKR Rodas - Inspeção</title>
 
         <meta name="apple-mobile-web-app-title" content="MKR Rodas" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -18,43 +17,23 @@
         />
         <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
 
-        <link rel="manifest" href="/site.webmanifest" />
-        <meta name="theme-color" content="#ffffff" />
-
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
         <link
-            href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap"
+            href="https://fonts.googleapis.com/css2?family=Inter:wght@400;900&display=swap"
             rel="stylesheet"
         />
 
         <style>
-            /* Reset Inicial */
             html,
             body {
                 margin: 0;
                 padding: 0;
                 width: 100%;
+                height: 100%;
                 background-color: #ffffff;
             }
 
-            /* TRAVA O SCROLL: Apenas enquanto NÃO tiver a classe .loaded */
-            body:not(.loaded) {
-                overflow: hidden !important;
-                height: 100vh !important;
-                position: fixed;
-                width: 100%;
-            }
-
-            /* LIBERA O SCROLL: Quando o React avisar que carregou */
-            body.loaded {
-                overflow: visible !important;
-                overflow-x: hidden !important;
-                height: auto !important;
-                position: relative !important;
-            }
-
-            /* Splash Screen Layout */
             #splash-screen {
                 position: fixed;
                 top: 0;
@@ -68,102 +47,140 @@
                 justify-content: center;
                 z-index: 99999;
                 transition:
-                    opacity 0.5s ease,
-                    visibility 0.5s;
+                    transform 0.8s cubic-bezier(0.77, 0, 0.175, 1),
+                    visibility 0.8s;
             }
 
-            .splash-logo {
-                width: 160px;
-                height: auto;
-                margin-bottom: 24px;
-                animation: pulse 2s infinite ease-in-out;
+            .content-wrapper {
+                text-align: center;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
             }
 
-            .splash-title {
+            .mkr-reveal {
                 font-family: "Inter", sans-serif;
                 font-weight: 900;
+                font-size: clamp(32px, 8vw, 44px);
                 text-transform: uppercase;
                 font-style: italic;
-                letter-spacing: -0.02em;
-                font-size: 28px;
-                color: #000000;
+                color: #000;
+                margin: 0;
+                background: linear-gradient(
+                    75deg,
+                    #000 35%,
+                    #666 50%,
+                    #000 65%
+                );
+                background-size: 200% auto;
+                -webkit-background-clip: text;
+                -webkit-text-fill-color: transparent;
+                animation:
+                    shine 3s infinite,
+                    tracking 3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
             }
 
-            .loader-container {
-                width: 120px;
-                height: 4px;
-                background-color: #f0f0f0;
-                margin-top: 30px;
+            @keyframes shine {
+                to {
+                    background-position: 200% center;
+                }
+            }
+            @keyframes tracking {
+                from {
+                    letter-spacing: -3px;
+                    opacity: 0;
+                    filter: blur(5px);
+                }
+                to {
+                    letter-spacing: 1px;
+                    opacity: 1;
+                    filter: blur(0);
+                }
+            }
+
+            .mkr-loader-bar {
+                width: 80px;
+                height: 1px;
+                background: #f0f0f0;
+                margin-top: 35px;
                 position: relative;
                 overflow: hidden;
-                border-radius: 20px;
             }
-
-            .loader-bar {
+            .mkr-loader-bar::after {
+                content: "";
                 position: absolute;
-                width: 60%;
+                width: 40%;
                 height: 100%;
-                background-color: #000000;
-                animation: loading 1.8s infinite ease-in-out;
-                border-radius: 20px;
+                background: #000;
+                left: -100%;
+                animation: slide 2s infinite ease-in-out;
             }
-
-            @keyframes pulse {
-                0%,
-                100% {
-                    transform: scale(1);
-                    opacity: 1;
+            @keyframes slide {
+                0% {
+                    left: -100%;
+                    width: 20%;
                 }
                 50% {
-                    transform: scale(1.05);
-                    opacity: 0.9;
-                }
-            }
-
-            @keyframes loading {
-                0% {
-                    left: -60%;
+                    left: 40%;
+                    width: 60%;
                 }
                 100% {
                     left: 100%;
+                    width: 20%;
                 }
             }
 
-            /* Esconde a Splash */
-            body.loaded #splash-screen {
+            .subtitle {
+                font-family: "Inter", sans-serif;
+                font-weight: 400;
+                font-size: clamp(9px, 2.5vw, 11px);
+                letter-spacing: 5px; /* Espaçamento profissional, mas legível */
+                color: #999;
+                margin-top: 12px;
+                text-transform: uppercase;
                 opacity: 0;
-                visibility: hidden;
-                pointer-events: none;
+                animation: fadeIn 1s ease forwards 1s;
+            }
+
+            @keyframes fadeIn {
+                to {
+                    opacity: 1;
+                }
+            }
+
+            body.loaded #splash-screen {
+                transform: translateY(-100%);
+            }
+            body.loaded {
+                overflow-y: auto !important;
+            }
+            body:not(.loaded) {
+                overflow: hidden;
+                height: 100vh;
+                position: fixed;
+                width: 100%;
             }
         </style>
     </head>
     <body>
         <div id="splash-screen">
-            <img
-                src="/apple-touch-icon.png"
-                alt="MKR Rodas"
-                class="splash-logo"
-            />
-            <div class="splash-title">MKR Rodas</div>
-            <div class="loader-container">
-                <div class="loader-bar"></div>
+            <div class="content-wrapper">
+                <h1 class="mkr-reveal">MKR RODAS</h1>
+                <div class="subtitle">Catálogo de Defeitos</div>
+                <div class="mkr-loader-bar"></div>
             </div>
         </div>
 
         <div id="root"></div>
 
         <script>
-            // Função para liberar a tela manualmente
             window.hideSplashScreen = function () {
                 document.body.classList.add("loaded");
             };
-
-            // Fallback de segurança: libera em 5s se o React falhar
             setTimeout(function () {
                 document.body.classList.add("loaded");
             }, 5000);
         </script>
-
         <script type="module" src="/src/index.tsx"></script>
     </body>
 </html>
