@@ -40,9 +40,7 @@ const CatalogPage: React.FC = () => {
   const fetchingRef = useRef(false);
   const requestIdRef = useRef(0);
 
-  /* =========================
-     1) CARREGAR OPÇÕES DE FILTRO (IGNORA LIXEIRA)
-     ========================= */
+  /* 1) CARREGAR OPÇÕES DE FILTRO */
   const loadFilterOptions = useCallback(async () => {
     try {
       const { data, error } = await supabase
@@ -67,20 +65,17 @@ const CatalogPage: React.FC = () => {
     loadFilterOptions();
   }, [loadFilterOptions]);
 
-  /* =========================
-     2) CARREGAR RODAS (APENAS ATIVAS)
-     ========================= */
+  /* 2) CARREGAR RODAS COM LOGICA DE FILTRO CORRIGIDA */
   const loadWheels = useCallback(
     async (isInitial = false) => {
       const myRequestId = ++requestIdRef.current;
-      if (fetchingRef.current) return;
+      if (fetchingRef.current && !isInitial) return;
       fetchingRef.current = true;
 
       try {
         if (isInitial) {
           setLoading(true);
           pageRef.current = 0;
-          setRawWheels([]);
           setHasMore(true);
         } else {
           setLoadingMore(true);
@@ -92,36 +87,35 @@ const CatalogPage: React.FC = () => {
         let query = supabase
           .from("individual_wheels")
           .select("*")
-          .is("deleted_at", null); // ✅ Filtro da lixeira
+          .is("deleted_at", null);
 
+        // Filtros Exatos
         if (filters.model) query = query.eq("model", filters.model);
         if (filters.boltPattern) query = query.eq("bolt_pattern", filters.boltPattern);
         if (filters.finish) query = query.eq("finish", filters.finish);
-        if (filters.size) query = query.ilike("size", `${filters.size}%`);
+        
+        // Filtro de Tamanho (Aro) - Usa LIKE para encontrar o número
+        if (filters.size) query = query.ilike("size", `%${filters.size}%`);
+        
+        // Busca Global
         if (filters.search) {
           query = query.or(`model.ilike.%${filters.search}%,description.ilike.%${filters.search}%`);
         }
+
+        // Filtro de Defeitos (Ajustado para Array ou Texto)
         if (filters.defectType) {
           query = query.contains("defects", [filters.defectType]);
         }
 
         const { data, error } = await query
-          .order("model", { ascending: true })
-          .order("finish", { ascending: true })
-          .order("id", { ascending: true })
+          .order("created_at", { ascending: false })
           .range(from, to);
 
         if (error) throw error;
         if (myRequestId !== requestIdRef.current) return;
 
         const rows = data ?? [];
-        setRawWheels((prev) => {
-          const next = isInitial ? rows : [...prev, ...rows];
-          const map = new Map<string, any>();
-          for (const r of next) map.set(r.id, r);
-          return Array.from(map.values());
-        });
-
+        setRawWheels((prev) => (isInitial ? rows : [...prev, ...rows]));
         setHasMore(rows.length === ITEMS_PER_PAGE);
         if (rows.length > 0) pageRef.current += 1;
       } catch (err) {
@@ -151,7 +145,7 @@ const CatalogPage: React.FC = () => {
           loadWheels(false);
         }
       },
-      { threshold: 0.1, rootMargin: "200px" }
+      { threshold: 0.1, rootMargin: "400px" }
     );
     if (loadMoreRef.current) observer.observe(loadMoreRef.current);
     return () => observer.disconnect();
@@ -161,7 +155,6 @@ const CatalogPage: React.FC = () => {
 
   const resetFilters = () => {
     setFilters({ search: "", model: "", size: "", boltPattern: "", finish: "", defectType: "" });
-    setIsFilterModalOpen(false);
   };
 
   const removeFilter = (key: keyof FilterState) => {
@@ -169,15 +162,15 @@ const CatalogPage: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col min-h-screen bg-gray-50 text-gray-900 font-sans overflow-x-hidden">
+    <div className="flex flex-col min-h-screen bg-gray-50 text-gray-900 font-sans">
       <Header />
 
       <main className="flex-grow pt-16">
         <div className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-8 flex flex-col md:flex-row gap-8">
-
+          
+          {/* Sidebar Desktop */}
           <aside className="hidden lg:block w-72 shrink-0">
             <div className="sticky top-24">
-              {/* ✅ REMOVIDO BOTÃO DE "NOVA RODA" DAQUI */}
               <FilterSidebar
                 filters={filters} setFilters={setFilters} onReset={resetFilters}
                 models={filterOptions.models} boltPatterns={filterOptions.boltPatterns} finishes={filterOptions.finishes}
@@ -186,12 +179,13 @@ const CatalogPage: React.FC = () => {
           </aside>
 
           <div className="flex-grow min-w-0">
+            {/* Barra de Busca e Botão Filtro Mobile */}
             <div className="flex flex-col sm:flex-row gap-4 mb-6">
               <div className="relative flex-grow group">
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5 group-focus-within:text-black transition-colors" />
                 <input
                   type="text"
-                  placeholder="Buscar modelo..."
+                  placeholder="Buscar modelo ou descrição..."
                   className="w-full pl-12 pr-4 py-4 bg-white shadow-sm border border-transparent rounded-2xl focus:border-black outline-none transition-all text-sm font-bold italic"
                   value={filters.search}
                   onChange={(e) => setFilters((prev) => ({ ...prev, search: e.target.value }))}
@@ -206,6 +200,7 @@ const CatalogPage: React.FC = () => {
               </button>
             </div>
 
+            {/* Badges de Filtros Ativos */}
             <div className="flex flex-wrap items-center gap-2 mb-8">
               {Object.entries(filters).map(([key, value]) => {
                 if (key === "search" || !value) return null;
@@ -219,27 +214,33 @@ const CatalogPage: React.FC = () => {
                   </button>
                 );
               })}
-              {Object.values(filters).some((v) => v !== "") && (
+              {Object.values(filters).some((v, i) => Object.keys(filters)[i] !== 'search' && v !== "") && (
                 <button onClick={resetFilters} className="text-[10px] font-black uppercase text-gray-400 hover:text-black flex items-center gap-1 ml-2 transition-colors">
-                  <RotateCcw size={12} /> Limpar
+                  <RotateCcw size={12} /> Limpar Tudo
                 </button>
               )}
             </div>
 
+            {/* Listagem de Cards */}
             {loading ? (
               <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4">
                 {[...Array(8)].map((_, i) => <WheelCardSkeleton key={i} />)}
               </div>
+            ) : wheelGroups.length === 0 ? (
+              <div className="py-20 text-center bg-white rounded-[2rem] border-2 border-dashed border-gray-200">
+                 <p className="text-gray-400 font-medium">Nenhuma roda encontrada com esses filtros.</p>
+              </div>
             ) : (
               <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
                 {wheelGroups.map((group) => (
-                  <Link key={group.id} to={`/roda/${group.wheels[0].id}`} className="group">
+                  <Link key={group.id} to={`/roda/${group.wheels[0].id}`} className="group transition-transform hover:-translate-y-1">
                     <WheelCard group={group} onClick={() => { }} />
                   </Link>
                 ))}
               </div>
             )}
 
+            {/* Infinite Scroll Loader */}
             <div ref={loadMoreRef} className="py-20 flex justify-center">
               {loadingMore && <Loader2 className="w-10 h-10 animate-spin text-black" />}
             </div>
@@ -247,7 +248,42 @@ const CatalogPage: React.FC = () => {
         </div>
       </main>
 
-      {/* ✅ REMOVIDO AddWheelModal DAQUI */}
+      {/* MODAL DE FILTRO MOBILE */}
+      {isFilterModalOpen && (
+        <div className="fixed inset-0 z-[100] lg:hidden">
+          <div 
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300" 
+            onClick={() => setIsFilterModalOpen(false)} 
+          />
+          <div className="absolute right-0 top-0 h-full w-[300px] bg-white shadow-2xl p-6 overflow-y-auto animate-in slide-in-from-right duration-300">
+            <div className="flex justify-between items-center mb-8">
+              <h2 className="text-xl font-black uppercase italic tracking-tighter">Filtros</h2>
+              <button 
+                onClick={() => setIsFilterModalOpen(false)} 
+                className="p-2 bg-gray-100 rounded-full hover:bg-black hover:text-white transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <FilterSidebar
+              filters={filters} 
+              setFilters={setFilters} 
+              onReset={resetFilters}
+              models={filterOptions.models} 
+              boltPatterns={filterOptions.boltPatterns} 
+              finishes={filterOptions.finishes}
+            />
+
+            <button 
+              onClick={() => setIsFilterModalOpen(false)}
+              className="w-full mt-10 bg-black text-white py-4 rounded-2xl font-black uppercase text-[10px] tracking-[0.2em] shadow-lg active:scale-95 transition-all"
+            >
+              Aplicar Filtros
+            </button>
+          </div>
+        </div>
+      )}
 
       <Footer />
     </div>
