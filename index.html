@@ -8,9 +8,11 @@
             content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
         />
 
-        <title>Catálogo de Rodas</title>
+        <title>MKR Rodas - Catálogo</title>
 
-        <meta name="apple-mobile-web-app-title" content="RodasApp" />
+        <meta name="apple-mobile-web-app-title" content="MKR Rodas" />
+        <meta name="application-name" content="MKR Rodas" />
+
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta
             name="apple-mobile-web-app-status-bar-style"
@@ -53,14 +55,14 @@
                 flex-direction: column;
                 align-items: center;
                 justify-content: center;
-                z-index: 99999; /* Garantir que fique acima de tudo */
+                z-index: 99999;
                 transition:
                     opacity 0.6s cubic-bezier(0.4, 0, 0.2, 1),
                     visibility 0.6s;
             }
 
             .splash-logo {
-                width: 160px; /* Aumentado de 120px para 160px */
+                width: 180px; /* Aumentado para MKR Rodas ficar bem imponente */
                 height: auto;
                 margin-bottom: 24px;
                 animation: pulse 2s infinite ease-in-out;
@@ -72,16 +74,15 @@
                 text-transform: uppercase;
                 font-style: italic;
                 letter-spacing: -0.02em;
-                font-size: 28px; /* Aumentado */
+                font-size: 32px; /* Aumentado */
                 color: #000000;
             }
 
-            /* Barra de loading maior e mais visível */
             .loader-container {
-                width: 120px; /* Largura da barra aumentada */
+                width: 140px; /* Barra um pouco maior */
                 height: 4px;
                 background-color: #f0f0f0;
-                margin-top: 30px;
+                margin-top: 35px;
                 position: relative;
                 overflow: hidden;
                 border-radius: 20px;
@@ -117,7 +118,6 @@
                 }
             }
 
-            /* Saída elegante */
             body.loaded #splash-screen {
                 opacity: 0;
                 visibility: hidden;
@@ -127,8 +127,12 @@
     </head>
     <body>
         <div id="splash-screen">
-            <img src="/apple-touch-icon.png" alt="Logo" class="splash-logo" />
-            <div class="splash-title">RodasApp</div>
+            <img
+                src="/apple-touch-icon.png"
+                alt="Logo MKR"
+                class="splash-logo"
+            />
+            <div class="splash-title">MKR Rodas</div>
             <div class="loader-container">
                 <div class="loader-bar"></div>
             </div>
@@ -137,18 +141,16 @@
         <div id="root"></div>
 
         <script>
-            // Função global que o React chamará quando o catálogo carregar
             window.hideSplashScreen = function () {
-                // Pequeno delay para a animação do React terminar
                 setTimeout(function () {
                     document.body.classList.add("loaded");
                 }, 500);
             };
 
-            // Fallback de segurança: Se o React falhar, remove a splash após 5 segundos
+            // Fallback: Se o React/Supabase demorar demais, libera a tela em 6s
             setTimeout(function () {
                 document.body.classList.add("loaded");
-            }, 5000);
+            }, 6000);
         </script>
 
         <script type="module" src="/src/index.tsx"></script>
