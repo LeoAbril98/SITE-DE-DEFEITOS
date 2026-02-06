@@ -31,7 +31,7 @@ const optimizeMedia = (url: string, width?: number, isPoster?: boolean) => {
   return url.replace("/upload/", `/upload/${params}/`);
 };
 
-// --- TOAST NOTIFICATION ---
+// --- COMPONENTE DE NOTIFICAÇÃO (TOAST) ---
 const Toast = ({ message, onClose }: { message: string | null, onClose: () => void }) => {
     useEffect(() => {
         if (message) {
@@ -43,7 +43,7 @@ const Toast = ({ message, onClose }: { message: string | null, onClose: () => vo
     if (!message) return null;
 
     return (
-        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[9999] animate-in slide-in-from-bottom-5 fade-in duration-300">
+        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[9999] animate-in slide-in-from-bottom-5 fade-in duration-300 pointer-events-none">
             <div className="bg-gray-900 text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-3">
                 <div className="bg-green-500 rounded-full p-1"><Check size={12} className="text-white" strokeWidth={4} /></div>
                 <span className="font-bold text-sm uppercase tracking-wide">{message}</span>
@@ -120,12 +120,7 @@ const WheelDetail: React.FC<WheelDetailProps> = ({ group, onBack }) => {
   };
 
   const copyToClipboard = async (index: number) => {
-    try { 
-        await navigator.clipboard.writeText(getTechnicalMessage(index)); 
-        setToastMessage("Texto técnico copiado!"); 
-    } catch { 
-        setToastMessage("Erro ao copiar."); 
-    }
+    try { await navigator.clipboard.writeText(getTechnicalMessage(index)); setToastMessage("Texto técnico copiado!"); } catch { setToastMessage("Erro ao copiar."); }
   };
 
   return (
@@ -206,37 +201,44 @@ const IndividualWheelCard: React.FC<{ item: IndividualWheel; index: number; onSh
   const mediaList = useMemo(() => [ ...photos.map((u) => ({ type: "image" as const, url: u })), ...(item.video_url ? [{ type: "video" as const, url: item.video_url }] : []) ], [photos, item.video_url]);
   const [active, setActive] = useState(0);
 
-  const next = () => setActive((prev) => (prev + 1) % mediaList.length);
-  const prev = () => setActive((prev) => (prev - 1 + mediaList.length) % mediaList.length);
+  // Navegação
+  const goNext = () => setActive((curr) => (curr + 1) % mediaList.length);
+  const goPrev = () => setActive((curr) => (curr - 1 + mediaList.length) % mediaList.length);
 
+  // Touch Logic (Swipe)
   const [touchStart, setTouchStart] = useState<number | null>(null);
   const [touchEnd, setTouchEnd] = useState<number | null>(null);
+  
   const onTouchStart = (e: React.TouchEvent) => setTouchStart(e.targetTouches[0].clientX);
   const onTouchMove = (e: React.TouchEvent) => setTouchEnd(e.targetTouches[0].clientX);
   const onTouchEnd = () => {
     if (!touchStart || !touchEnd) return;
     const distance = touchStart - touchEnd;
-    if (distance > 50) next(); 
-    if (distance < -50) prev();
+    if (distance > 50) goNext(); 
+    if (distance < -50) goPrev();
     setTouchStart(null); setTouchEnd(null);
   };
 
   return (
     <div className="grid lg:grid-cols-2 gap-12 sm:gap-16 items-start border-b border-gray-50 pb-20 last:border-0 w-full overflow-x-hidden">
       <div className="space-y-6 min-w-0">
+        {/* CARROSSEL PRINCIPAL - APENAS VISUALIZAÇÃO */}
         <div 
-            className="group relative aspect-square bg-white rounded-[2rem] sm:rounded-[3rem] overflow-hidden border-2 border-gray-100 shadow-sm flex items-center justify-center"
+            className="group relative aspect-square bg-white rounded-[2rem] sm:rounded-[3rem] overflow-hidden border-2 border-gray-100 shadow-sm flex items-center justify-center touch-pan-y"
             onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}
         >
-          {mediaList.length > 0 ? ( mediaList[active].type === "video" ? <video src={optimizeMedia(mediaList[active].url)} autoPlay muted loop playsInline className="w-full h-full object-cover" /> : <img src={optimizeMedia(mediaList[active].url, 1200)} className="w-full h-full object-cover" alt="" /> ) : <CameraOff size={60} className="text-gray-200" />}
+          {mediaList.length > 0 ? ( mediaList[active].type === "video" ? <video src={optimizeMedia(mediaList[active].url)} autoPlay muted loop playsInline className="w-full h-full object-cover" /> : <img src={optimizeMedia(mediaList[active].url, 1200)} className="w-full h-full object-cover pointer-events-none" alt="" /> ) : <CameraOff size={60} className="text-gray-200" />}
           
+          {/* Setas de Navegação */}
           {mediaList.length > 1 && ( <>
-              <button onClick={(e) => { e.stopPropagation(); prev(); }} className="absolute left-4 top-1/2 -translate-y-1/2 w-10 h-10 bg-white/90 backdrop-blur-md rounded-full flex items-center justify-center shadow-lg active:scale-90 transition-all sm:opacity-0 group-hover:opacity-100"><ChevronLeft size={20} /></button>
-              <button onClick={(e) => { e.stopPropagation(); next(); }} className="absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 bg-white/90 backdrop-blur-md rounded-full flex items-center justify-center shadow-lg active:scale-90 transition-all sm:opacity-0 group-hover:opacity-100"><ChevronRight size={20} /></button>
-              <div className="absolute bottom-6 left-0 right-0 flex justify-center gap-1.5 px-10">{mediaList.map((_, i) => (<div key={i} className={`h-1 rounded-full transition-all duration-300 ${i === active ? "w-8 bg-white shadow-md" : "w-2 bg-white/40"}`} />))}</div>
+              <button onClick={(e) => { e.stopPropagation(); goPrev(); }} className="absolute left-4 top-1/2 -translate-y-1/2 w-10 h-10 bg-white/90 backdrop-blur-md rounded-full flex items-center justify-center shadow-lg active:scale-90 transition-all sm:opacity-0 group-hover:opacity-100"><ChevronLeft size={20} /></button>
+              <button onClick={(e) => { e.stopPropagation(); goNext(); }} className="absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 bg-white/90 backdrop-blur-md rounded-full flex items-center justify-center shadow-lg active:scale-90 transition-all sm:opacity-0 group-hover:opacity-100"><ChevronRight size={20} /></button>
+              {/* Indicadores (Bolinhas/Traços) */}
+              <div className="absolute bottom-6 left-0 right-0 flex justify-center gap-1.5 px-10 pointer-events-none">{mediaList.map((_, i) => (<div key={i} className={`h-1 rounded-full transition-all duration-300 ${i === active ? "w-8 bg-white shadow-md" : "w-2 bg-white/40"}`} />))}</div>
           </> )}
         </div>
 
+        {/* THUMBNAILS - Lista pequena embaixo */}
         <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide max-w-full">
           {mediaList.map((m, i) => (
             <button key={i} onClick={() => setActive(i)} className={`min-w-[90px] h-[90px] sm:min-w-[110px] sm:h-[110px] rounded-[1.2rem] sm:rounded-[1.5rem] overflow-hidden border-4 transition-all ${active === i ? "border-blue-600 scale-105 shadow-md" : "border-white opacity-40 hover:opacity-70"}`}>
