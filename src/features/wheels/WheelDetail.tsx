@@ -131,6 +131,7 @@ const WheelDetail: React.FC<WheelDetailProps> = ({ group, onBack }) => {
       <Toast message={toastMessage} onClose={() => setToastMessage(null)} />
       <button onClick={onBack} className="flex items-center gap-2 text-sm font-black uppercase text-gray-400 hover:text-black mb-8 transition-colors"><ChevronLeft className="w-4 h-4" /> Voltar ao catálogo</button>
 
+      {/* HEADER */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-12 border-b-4 border-gray-50 pb-12">
         <div className="flex items-start gap-4 sm:gap-6 min-w-0">
           <div className="w-20 h-20 md:w-28 md:h-28 rounded-2xl overflow-hidden border-2 border-gray-100 shadow-sm bg-gray-50 flex-shrink-0">
@@ -192,45 +193,33 @@ const WheelDetail: React.FC<WheelDetailProps> = ({ group, onBack }) => {
   );
 };
 
-// --- LIGHTBOX COM SCROLL NATIVO ---
+// --- LIGHTBOX COM SCROLL NATIVO & SEM SWIPE LATERAL ---
 const EnhancedLightbox = ({ mediaList, initialIndex, onClose }: { mediaList: { type: "image" | "video"; url: string }[], initialIndex: number, onClose: () => void }) => {
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
   const [isZoomed, setIsZoomed] = useState(false);
   const currentMedia = mediaList[currentIndex];
 
-  // DEFININDO NEXT E PREV ANTES DE USÁ-LOS
+  // Navegação APENAS por botões (Swipe removido aqui)
   const next = (e?: React.MouseEvent) => { e?.stopPropagation(); setCurrentIndex((prev) => (prev + 1) % mediaList.length); setIsZoomed(false); };
   const prev = (e?: React.MouseEvent) => { e?.stopPropagation(); setCurrentIndex((prev) => (prev - 1 + mediaList.length) % mediaList.length); setIsZoomed(false); };
 
-  // SWIPE LOGIC
-  const [touchStart, setTouchStart] = useState<number | null>(null);
-  const [touchEnd, setTouchEnd] = useState<number | null>(null);
-
-  const onTouchStart = (e: React.TouchEvent) => { if (!isZoomed) setTouchStart(e.targetTouches[0].clientX); };
-  const onTouchMove = (e: React.TouchEvent) => { if (!isZoomed) setTouchEnd(e.targetTouches[0].clientX); };
-  const onTouchEnd = () => {
-    if (!touchStart || !touchEnd || isZoomed) return;
-    const distance = touchStart - touchEnd;
-    if (distance > 50) next();
-    if (distance < -50) prev();
-    setTouchStart(null); setTouchEnd(null);
-  };
-
+  // Toggle simples: Scroll Nativo vs Fit Screen
   const toggleZoom = (e: React.MouseEvent | React.TouchEvent) => { e.stopPropagation(); if (currentMedia.type === "video") return; setIsZoomed(!isZoomed); };
 
   const download = async (e: React.MouseEvent) => { e.stopPropagation(); try { const r = await fetch(optimizeMedia(currentMedia.url, 2000)); const b = await r.blob(); const l = document.createElement("a"); l.href = window.URL.createObjectURL(b); l.download = `zoom_${currentIndex}.jpg`; l.click(); } catch (e) { console.error(e) } };
 
   return (
     <div className="fixed inset-0 z-[200] bg-black flex flex-col animate-in fade-in" onClick={onClose}>
+      {/* Toolbar Fixa */}
       <div className="absolute top-0 w-full p-4 flex justify-between z-50 bg-gradient-to-b from-black/80 to-transparent pointer-events-none">
         <span className="text-white/80 font-mono text-xs bg-white/10 px-3 py-1 rounded-full backdrop-blur-md pointer-events-auto">{currentIndex + 1}/{mediaList.length}</span>
         <div className="flex gap-4 pointer-events-auto"><button onClick={download} className="p-2 bg-white/10 rounded-full text-white"><Download size={20} /></button><button onClick={onClose} className="p-2 bg-white/10 rounded-full text-white"><X size={20} /></button></div>
       </div>
 
+      {/* CONTAINER DA IMAGEM - SEM HANDLERS DE TOUCH SWIPE */}
       <div
         className={`w-full h-full flex items-center justify-center ${isZoomed ? "overflow-auto cursor-zoom-out block" : "overflow-hidden cursor-zoom-in"}`}
         onClick={toggleZoom}
-        onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}
       >
         {currentMedia.type === "video" ? (
           <video src={currentMedia.url} controls autoPlay className="max-w-full max-h-full" onClick={e => e.stopPropagation()} />
@@ -243,6 +232,7 @@ const EnhancedLightbox = ({ mediaList, initialIndex, onClose }: { mediaList: { t
         )}
       </div>
 
+      {/* Controles Inferiores - Única forma de navegar agora */}
       <div className="absolute bottom-8 w-full flex justify-center items-center gap-8 z-50 pointer-events-none">
         <button onClick={prev} className="w-12 h-12 bg-white/10 rounded-full flex items-center justify-center text-white backdrop-blur-md hover:bg-white/20 pointer-events-auto"><ChevronLeft size={24} /></button>
         {currentMedia.type === "image" && (
@@ -261,7 +251,7 @@ const IndividualWheelCard: React.FC<{ item: IndividualWheel; index: number; onSh
   const mediaList = useMemo(() => [...photos.map((u) => ({ type: "image" as const, url: u })), ...(item.video_url ? [{ type: "video" as const, url: item.video_url }] : [])], [photos, item.video_url]);
   const [active, setActive] = useState(0);
 
-  // DEFININDO NEXT E PREV ANTES DE USÁ-LOS NO SWIPE
+  // SWIPE MANTIDO APENAS AQUI NO CARD PEQUENO
   const next = () => setActive((prev) => (prev + 1) % mediaList.length);
   const prev = () => setActive((prev) => (prev - 1 + mediaList.length) % mediaList.length);
 
