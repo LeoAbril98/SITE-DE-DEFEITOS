@@ -43,9 +43,7 @@ const Toast = ({ message, onClose }: { message: string | null, onClose: () => vo
       return () => clearTimeout(timer);
     }
   }, [message, onClose]);
-
   if (!message) return null;
-
   return (
     <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-[9999] animate-in slide-in-from-bottom-5 fade-in duration-300">
       <div className="bg-gray-900 text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-3">
@@ -125,23 +123,14 @@ const WheelDetail: React.FC<WheelDetailProps> = ({ group, onBack }) => {
   };
 
   const copyToClipboard = async (index: number) => {
-    try {
-      await navigator.clipboard.writeText(getTechnicalMessage(index));
-      setToastMessage("Texto técnico copiado!");
-    } catch {
-      setToastMessage("Erro ao copiar.");
-    }
+    try { await navigator.clipboard.writeText(getTechnicalMessage(index)); setToastMessage("Texto técnico copiado!"); } catch { setToastMessage("Erro ao copiar."); }
   };
 
   return (
     <div className="max-w-[1200px] mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-in fade-in bg-white text-gray-900 font-sans w-full overflow-x-hidden">
       <Toast message={toastMessage} onClose={() => setToastMessage(null)} />
+      <button onClick={onBack} className="flex items-center gap-2 text-sm font-black uppercase text-gray-400 hover:text-black mb-8 transition-colors"><ChevronLeft className="w-4 h-4" /> Voltar ao catálogo</button>
 
-      <button onClick={onBack} className="flex items-center gap-2 text-sm font-black uppercase text-gray-400 hover:text-black mb-8 transition-colors">
-        <ChevronLeft className="w-4 h-4" /> Voltar ao catálogo
-      </button>
-
-      {/* HEADER */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-12 border-b-4 border-gray-50 pb-12">
         <div className="flex items-start gap-4 sm:gap-6 min-w-0">
           <div className="w-20 h-20 md:w-28 md:h-28 rounded-2xl overflow-hidden border-2 border-gray-100 shadow-sm bg-gray-50 flex-shrink-0">
@@ -161,11 +150,7 @@ const WheelDetail: React.FC<WheelDetailProps> = ({ group, onBack }) => {
 
       <div className="space-y-32">
         {group.wheels.map((item, index) => (
-          <IndividualWheelCard
-            key={item.id} item={item} index={index}
-            onShare={() => handleShareClick(item, index)}
-            onZoom={(mediaList, clickedIndex) => setZoomState({ isOpen: true, mediaList, activeIndex: clickedIndex })}
-          />
+          <IndividualWheelCard key={item.id} item={item} index={index} onShare={() => handleShareClick(item, index)} onZoom={(mediaList, clickedIndex) => setZoomState({ isOpen: true, mediaList, activeIndex: clickedIndex })} />
         ))}
       </div>
 
@@ -175,9 +160,7 @@ const WheelDetail: React.FC<WheelDetailProps> = ({ group, onBack }) => {
             <button onClick={() => setIsModalOpen(false)} className="absolute top-6 right-6 text-gray-400 hover:text-black"><X size={24} /></button>
             <div className="text-center space-y-6">
               <div className="w-20 h-20 bg-blue-50 rounded-full flex items-center justify-center mx-auto"><Share2 className="text-blue-600 w-10 h-10" /></div>
-              <h2 className="text-2xl font-black uppercase italic tracking-tight text-gray-900">
-                {downloadStatus.active ? "Preparando Mídias" : "Relatório Técnico"}
-              </h2>
+              <h2 className="text-2xl font-black uppercase italic tracking-tight text-gray-900">{downloadStatus.active ? "Preparando Mídias" : "Relatório Técnico"}</h2>
               <div className="space-y-4 text-left bg-gray-50 p-6 rounded-3xl border border-gray-100">
                 {downloadStatus.active ? (
                   <div className="flex flex-col items-center gap-4 py-4 w-full">
@@ -195,9 +178,7 @@ const WheelDetail: React.FC<WheelDetailProps> = ({ group, onBack }) => {
                 <button disabled={downloadStatus.active} onClick={() => executeShare(selectedItem.item, selectedItem.index, false)} className={`py-6 rounded-2xl font-black uppercase text-sm tracking-widest flex items-center justify-center gap-3 transition-all ${downloadStatus.active ? "bg-blue-600 text-white" : "bg-black text-white hover:bg-gray-800 shadow-xl"}`}>
                   {downloadStatus.active ? "Processando..." : "Gerar e Enviar Relatório"}
                 </button>
-                <button onClick={() => copyToClipboard(selectedItem.index)} className="py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest border-2 border-gray-100 text-gray-400 hover:text-black hover:border-black flex items-center justify-center gap-2">
-                  <Copy size={14} /> Copiar Texto Técnico
-                </button>
+                <button onClick={() => copyToClipboard(selectedItem.index)} className="py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest border-2 border-gray-100 text-gray-400 hover:text-black hover:border-black flex items-center justify-center gap-2"><Copy size={14} /> Copiar Texto Técnico</button>
               </div>
             </div>
           </div>
@@ -211,161 +192,65 @@ const WheelDetail: React.FC<WheelDetailProps> = ({ group, onBack }) => {
   );
 };
 
-// --- LIGHTBOX COM PINCH-TO-ZOOM (ZOOM PINÇA) ---
+// --- LIGHTBOX COM SCROLL NATIVO ---
 const EnhancedLightbox = ({ mediaList, initialIndex, onClose }: { mediaList: { type: "image" | "video"; url: string }[], initialIndex: number, onClose: () => void }) => {
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
-  const [scale, setScale] = useState(1);
-  const [offset, setOffset] = useState({ x: 0, y: 0 });
-
-  // Refs para lógica de gestos
-  const gesture = useRef({
-    startDist: 0,
-    startScale: 1,
-    startX: 0,
-    startY: 0,
-    startOffset: { x: 0, y: 0 },
-    isPinching: false,
-    isPanning: false,
-    lastTap: 0 // Para Double Tap
-  });
-
+  const [isZoomed, setIsZoomed] = useState(false);
   const currentMedia = mediaList[currentIndex];
 
-  // Resetar ao trocar de imagem
-  useEffect(() => {
-    setScale(1);
-    setOffset({ x: 0, y: 0 });
-  }, [currentIndex]);
+  // DEFININDO NEXT E PREV ANTES DE USÁ-LOS
+  const next = (e?: React.MouseEvent) => { e?.stopPropagation(); setCurrentIndex((prev) => (prev + 1) % mediaList.length); setIsZoomed(false); };
+  const prev = (e?: React.MouseEvent) => { e?.stopPropagation(); setCurrentIndex((prev) => (prev - 1 + mediaList.length) % mediaList.length); setIsZoomed(false); };
 
-  // Navegação
-  const next = (e?: React.MouseEvent) => { e?.stopPropagation(); setCurrentIndex((prev) => (prev + 1) % mediaList.length); };
-  const prev = (e?: React.MouseEvent) => { e?.stopPropagation(); setCurrentIndex((prev) => (prev - 1 + mediaList.length) % mediaList.length); };
+  // SWIPE LOGIC
+  const [touchStart, setTouchStart] = useState<number | null>(null);
+  const [touchEnd, setTouchEnd] = useState<number | null>(null);
 
-  // Botões de Zoom
-  const handleZoomIn = (e: React.MouseEvent) => { e.stopPropagation(); setScale(Math.min(scale * 1.5, 4)); };
-  const handleReset = (e: React.MouseEvent) => { e.stopPropagation(); setScale(1); setOffset({ x: 0, y: 0 }); };
-
-  // --- LÓGICA DE TOQUE UNIFICADA (PINCH + PAN + SWIPE) ---
-  const onTouchStart = (e: React.TouchEvent) => {
-    // Double Tap
-    const now = Date.now();
-    if (now - gesture.current.lastTap < 300) {
-      // Double tap detectado -> Zoom In/Reset
-      if (scale > 1) {
-        setScale(1);
-        setOffset({ x: 0, y: 0 });
-      } else {
-        setScale(2.5);
-      }
-    }
-    gesture.current.lastTap = now;
-
-    if (e.touches.length === 2) {
-      // PINCH START
-      gesture.current.isPinching = true;
-      gesture.current.startDist = Math.hypot(
-        e.touches[0].clientX - e.touches[1].clientX,
-        e.touches[0].clientY - e.touches[1].clientY
-      );
-      gesture.current.startScale = scale;
-    } else if (e.touches.length === 1) {
-      // PAN/SWIPE START
-      gesture.current.isPanning = true;
-      gesture.current.startX = e.touches[0].clientX;
-      gesture.current.startY = e.touches[0].clientY;
-      gesture.current.startOffset = { ...offset };
-    }
+  const onTouchStart = (e: React.TouchEvent) => { if (!isZoomed) setTouchStart(e.targetTouches[0].clientX); };
+  const onTouchMove = (e: React.TouchEvent) => { if (!isZoomed) setTouchEnd(e.targetTouches[0].clientX); };
+  const onTouchEnd = () => {
+    if (!touchStart || !touchEnd || isZoomed) return;
+    const distance = touchStart - touchEnd;
+    if (distance > 50) next();
+    if (distance < -50) prev();
+    setTouchStart(null); setTouchEnd(null);
   };
 
-  const onTouchMove = (e: React.TouchEvent) => {
-    if (gesture.current.isPinching && e.touches.length === 2) {
-      // PINCH MOVE
-      e.preventDefault();
-      const dist = Math.hypot(
-        e.touches[0].clientX - e.touches[1].clientX,
-        e.touches[0].clientY - e.touches[1].clientY
-      );
-      const delta = dist / gesture.current.startDist;
-      // Limita o zoom entre 1x e 5x
-      setScale(Math.min(Math.max(1, gesture.current.startScale * delta), 5));
-    } else if (gesture.current.isPanning && e.touches.length === 1) {
-      // PAN MOVE
-      const clientX = e.touches[0].clientX;
-      const clientY = e.touches[0].clientY;
-      const dx = clientX - gesture.current.startX;
-      const dy = clientY - gesture.current.startY;
+  const toggleZoom = (e: React.MouseEvent | React.TouchEvent) => { e.stopPropagation(); if (currentMedia.type === "video") return; setIsZoomed(!isZoomed); };
 
-      if (scale > 1) {
-        // Se tiver zoom, move a imagem (PAN)
-        e.preventDefault();
-        setOffset({
-          x: gesture.current.startOffset.x + dx,
-          y: gesture.current.startOffset.y + dy
-        });
-      }
-    }
-  };
-
-  const onTouchEnd = (e: React.TouchEvent) => {
-    if (gesture.current.isPinching) {
-      gesture.current.isPinching = false;
-      // Se soltar com zoom menor que 1, volta pro normal
-      if (scale < 1) setScale(1);
-    } else if (gesture.current.isPanning) {
-      gesture.current.isPanning = false;
-
-      // Lógica de Swipe para trocar foto (só se não tiver zoom)
-      if (scale === 1) {
-        const dx = e.changedTouches[0].clientX - gesture.current.startX;
-        if (Math.abs(dx) > 50) {
-          if (dx > 0) prev(); // Swipe Right -> Anterior
-          else next(); // Swipe Left -> Próxima
-        }
-      }
-    }
-  };
-
-  // Download
   const download = async (e: React.MouseEvent) => { e.stopPropagation(); try { const r = await fetch(optimizeMedia(currentMedia.url, 2000)); const b = await r.blob(); const l = document.createElement("a"); l.href = window.URL.createObjectURL(b); l.download = `zoom_${currentIndex}.jpg`; l.click(); } catch (e) { console.error(e) } };
 
   return (
-    <div className="fixed inset-0 z-[200] bg-black flex flex-col items-center justify-center animate-in fade-in" onClick={onClose}>
-      {/* Header */}
-      <div className="absolute top-0 w-full p-4 flex justify-between z-50 bg-gradient-to-b from-black/50">
-        <span className="text-white/80 font-mono text-xs bg-white/10 px-3 py-1 rounded-full">{currentIndex + 1}/{mediaList.length}</span>
-        <div className="flex gap-4"><button onClick={download} className="p-2 bg-white/10 rounded-full text-white"><Download size={20} /></button><button onClick={onClose} className="p-2 bg-white/10 rounded-full text-white"><X size={20} /></button></div>
+    <div className="fixed inset-0 z-[200] bg-black flex flex-col animate-in fade-in" onClick={onClose}>
+      <div className="absolute top-0 w-full p-4 flex justify-between z-50 bg-gradient-to-b from-black/80 to-transparent pointer-events-none">
+        <span className="text-white/80 font-mono text-xs bg-white/10 px-3 py-1 rounded-full backdrop-blur-md pointer-events-auto">{currentIndex + 1}/{mediaList.length}</span>
+        <div className="flex gap-4 pointer-events-auto"><button onClick={download} className="p-2 bg-white/10 rounded-full text-white"><Download size={20} /></button><button onClick={onClose} className="p-2 bg-white/10 rounded-full text-white"><X size={20} /></button></div>
       </div>
 
-      {/* Área da Imagem */}
       <div
-        className="relative w-full h-full flex items-center justify-center overflow-hidden touch-none"
-        onTouchStart={onTouchStart}
-        onTouchMove={onTouchMove}
-        onTouchEnd={onTouchEnd}
+        className={`w-full h-full flex items-center justify-center ${isZoomed ? "overflow-auto cursor-zoom-out block" : "overflow-hidden cursor-zoom-in"}`}
+        onClick={toggleZoom}
+        onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}
       >
         {currentMedia.type === "video" ? (
           <video src={currentMedia.url} controls autoPlay className="max-w-full max-h-full" onClick={e => e.stopPropagation()} />
         ) : (
           <img
             src={optimizeMedia(currentMedia.url, 2000)}
-            className="max-w-full max-h-full transition-transform duration-75 ease-linear"
-            style={{
-              transform: `scale(${scale}) translate(${offset.x / scale}px, ${offset.y / scale}px)`,
-              cursor: scale > 1 ? "grab" : "zoom-in"
-            }}
+            className={`transition-all duration-300 ${isZoomed ? "min-w-[200%] min-h-[100%] object-contain" : "max-w-full max-h-full object-contain"}`}
+            style={isZoomed ? { transformOrigin: 'center center' } : {}}
           />
         )}
       </div>
 
-      {/* Controles Inferiores */}
-      <div className="absolute bottom-8 flex items-center gap-8 z-50" onClick={e => e.stopPropagation()}>
-        <button onClick={prev} className="w-12 h-12 bg-white/10 rounded-full flex items-center justify-center text-white backdrop-blur-md hover:bg-white/20"><ChevronLeft size={24} /></button>
+      <div className="absolute bottom-8 w-full flex justify-center items-center gap-8 z-50 pointer-events-none">
+        <button onClick={prev} className="w-12 h-12 bg-white/10 rounded-full flex items-center justify-center text-white backdrop-blur-md hover:bg-white/20 pointer-events-auto"><ChevronLeft size={24} /></button>
         {currentMedia.type === "image" && (
-          scale > 1 ?
-            <button onClick={handleReset} className="px-5 py-2.5 bg-blue-600 text-white rounded-full text-xs font-bold uppercase tracking-widest flex items-center gap-2 shadow-xl hover:bg-blue-700 transition-all transform hover:scale-105"><ZoomOut size={16} /> RESETAR</button> :
-            <button onClick={handleZoomIn} className="px-5 py-2.5 bg-white/10 text-white rounded-full text-xs font-bold uppercase tracking-widest flex items-center gap-2 backdrop-blur-md border border-white/20 hover:bg-white/20 transition-all"><ZoomIn size={16} /> AMPLIAR</button>
+          <button onClick={toggleZoom} className={`px-5 py-2.5 rounded-full text-xs font-bold uppercase tracking-widest flex items-center gap-2 shadow-xl transition-all pointer-events-auto ${isZoomed ? "bg-blue-600 text-white" : "bg-white/10 text-white border border-white/20 backdrop-blur-md"}`}>
+            {isZoomed ? <><ZoomOut size={16} /> RESETAR</> : <><ZoomIn size={16} /> AMPLIAR</>}
+          </button>
         )}
-        <button onClick={next} className="w-12 h-12 bg-white/10 rounded-full flex items-center justify-center text-white backdrop-blur-md hover:bg-white/20"><ChevronRight size={24} /></button>
+        <button onClick={next} className="w-12 h-12 bg-white/10 rounded-full flex items-center justify-center text-white backdrop-blur-md hover:bg-white/20 pointer-events-auto"><ChevronRight size={24} /></button>
       </div>
     </div>
   );
@@ -376,7 +261,10 @@ const IndividualWheelCard: React.FC<{ item: IndividualWheel; index: number; onSh
   const mediaList = useMemo(() => [...photos.map((u) => ({ type: "image" as const, url: u })), ...(item.video_url ? [{ type: "video" as const, url: item.video_url }] : [])], [photos, item.video_url]);
   const [active, setActive] = useState(0);
 
-  // Swipe simples para o card principal (antes de abrir o zoom)
+  // DEFININDO NEXT E PREV ANTES DE USÁ-LOS NO SWIPE
+  const next = () => setActive((prev) => (prev + 1) % mediaList.length);
+  const prev = () => setActive((prev) => (prev - 1 + mediaList.length) % mediaList.length);
+
   const [touchStart, setTouchStart] = useState<number | null>(null);
   const [touchEnd, setTouchEnd] = useState<number | null>(null);
   const onTouchStart = (e: React.TouchEvent) => setTouchStart(e.targetTouches[0].clientX);
@@ -384,13 +272,10 @@ const IndividualWheelCard: React.FC<{ item: IndividualWheel; index: number; onSh
   const onTouchEnd = () => {
     if (!touchStart || !touchEnd) return;
     const distance = touchStart - touchEnd;
-    if (distance > 50) setActive((prev) => (prev + 1) % mediaList.length);
-    if (distance < -50) setActive((prev) => (prev - 1 + mediaList.length) % mediaList.length);
+    if (distance > 50) next();
+    if (distance < -50) prev();
     setTouchStart(null); setTouchEnd(null);
   };
-
-  const next = () => setActive((prev) => (prev + 1) % mediaList.length);
-  const prev = () => setActive((prev) => (prev - 1 + mediaList.length) % mediaList.length);
 
   return (
     <div className="grid lg:grid-cols-2 gap-12 sm:gap-16 items-start border-b border-gray-50 pb-20 last:border-0 w-full overflow-x-hidden">
