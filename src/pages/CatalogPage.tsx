@@ -40,7 +40,7 @@ const CatalogPage: React.FC = () => {
   const fetchingRef = useRef(false);
   const requestIdRef = useRef(0);
 
-  /* 1) CARREGA APENAS OPÇÕES QUE EXISTEM NO ESTOQUE ATUAL */
+  /* 1) CARREGAR OPÇÕES DISPONÍVEIS */
   const loadFilterOptions = useCallback(async () => {
     try {
       const { data, error } = await supabase
@@ -65,7 +65,7 @@ const CatalogPage: React.FC = () => {
     loadFilterOptions();
   }, [loadFilterOptions]);
 
-  /* 2) CARREGAR RODAS COM ORDENAÇÃO E FILTROS CONECTADOS */
+  /* 2) CARREGAR RODAS COM ORDENAÇÃO HIERÁRQUICA */
   const loadWheels = useCallback(
     async (isInitial = false) => {
       const myRequestId = ++requestIdRef.current;
@@ -84,35 +84,24 @@ const CatalogPage: React.FC = () => {
         const from = pageRef.current * ITEMS_PER_PAGE;
         const to = from + ITEMS_PER_PAGE - 1;
 
-        let query = supabase
-          .from("individual_wheels")
-          .select("*")
-          .is("deleted_at", null);
+        let query = supabase.from("individual_wheels").select("*").is("deleted_at", null);
 
-        // --- MAPEAMENTO DE FILTROS DO FILTER-SIDEBAR ---
         if (filters.model) query = query.eq("model", filters.model);
-        
-        // Mapeia boltPattern (CamelCase do componente) para bolt_pattern (SnakeCase do Banco)
         if (filters.boltPattern) query = query.eq("bolt_pattern", filters.boltPattern);
-        
         if (filters.finish) query = query.eq("finish", filters.finish);
-        
-        // Como o seu FilterSidebar já limpa o Aro para "15", buscamos parcial no banco
         if (filters.size) query = query.ilike("size", `%${filters.size}%`);
-
         if (filters.search) {
           query = query.or(`model.ilike.%${filters.search}%,description.ilike.%${filters.search}%`);
         }
-
         if (filters.defectType) {
           query = query.contains("defects", [filters.defectType]);
         }
 
-        // --- ORDENAÇÃO RÍGIDA SOLICITADA ---
         const { data, error } = await query
-          .order("model", { ascending: true }) // 1. Ordem Alfabética
-          .order("size", { ascending: true })  // 2. Menor Aro para Maior
-          .order("bolt_pattern", { ascending: true }) // 3. Menor furação para maior
+          .order("model", { ascending: true })
+          .order("size", { ascending: true })
+          .order("bolt_pattern", { ascending: true })
+          .order("id", { ascending: true })
           .range(from, to);
 
         if (error) throw error;
@@ -141,11 +130,11 @@ const CatalogPage: React.FC = () => {
     [filters]
   );
 
-  // Efeito para recarregar quando qualquer filtro mudar
+  // Recarregar ao mudar filtros
   useEffect(() => {
     const timer = setTimeout(() => {
       loadWheels(true);
-    }, 400);
+    }, 300);
     return () => clearTimeout(timer);
   }, [filters, loadWheels]);
 
@@ -167,7 +156,6 @@ const CatalogPage: React.FC = () => {
 
   const resetFilters = () => {
     setFilters({ search: "", model: "", size: "", boltPattern: "", finish: "", defectType: "" });
-    setIsFilterModalOpen(false);
   };
 
   const removeFilter = (key: keyof FilterState) => {
@@ -181,7 +169,7 @@ const CatalogPage: React.FC = () => {
       <main className="flex-grow pt-16">
         <div className="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-8 flex flex-col md:flex-row gap-8">
           
-          {/* SIDEBAR DESKTOP - USANDO SEU COMPONENTE */}
+          {/* DESKTOP SIDEBAR */}
           <aside className="hidden lg:block w-72 shrink-0">
             <div className="sticky top-24">
               <FilterSidebar
@@ -196,7 +184,7 @@ const CatalogPage: React.FC = () => {
           </aside>
 
           <div className="flex-grow min-w-0">
-            {/* SEARCH E BOTÃO FILTRO MOBILE */}
+            {/* SEARCH E BOTÃO MOBILE */}
             <div className="flex flex-col sm:flex-row gap-4 mb-6">
               <div className="relative flex-grow group">
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5 group-focus-within:text-black transition-colors" />
@@ -223,8 +211,9 @@ const CatalogPage: React.FC = () => {
                 {[...Array(8)].map((_, i) => <div key={i} className="aspect-square bg-white rounded-[2rem] animate-pulse" />)}
               </div>
             ) : wheelGroups.length === 0 ? (
-              <div className="text-center py-20 bg-white rounded-[2.5rem] border-2 border-dashed border-gray-200">
-                <p className="text-gray-400 font-bold italic">Nenhuma roda encontrada para estes filtros.</p>
+              <div className="text-center py-20 bg-white rounded-[2.5rem] border-2 border-dashed border-gray-200 px-6">
+                <p className="text-gray-400 font-bold italic">Nenhum resultado encontrado.</p>
+                <button onClick={resetFilters} className="mt-4 text-sm font-black underline uppercase">Limpar Filtros</button>
               </div>
             ) : (
               <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
@@ -237,36 +226,44 @@ const CatalogPage: React.FC = () => {
             )}
 
             <div ref={loadMoreRef} className="py-20 flex justify-center">
-              {loadingMore && <Loader2 className="w-10 h-10 animate-spin text-black" />}
+              {(loadingMore || loading) && <Loader2 className="w-10 h-10 animate-spin text-black" />}
             </div>
           </div>
         </div>
       </main>
 
-      {/* MODAL DE FILTRO MOBILE - USANDO SEU COMPONENTE */}
+      {/* CORREÇÃO DO FILTRO MOBILE */}
       {isFilterModalOpen && (
-        <div className="fixed inset-0 z-[100] lg:hidden flex justify-end">
+        <div className="fixed inset-0 z-[100] lg:hidden">
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setIsFilterModalOpen(false)} />
-          <div className="relative h-full w-[85%] max-w-[320px] bg-white p-6 shadow-2xl overflow-y-auto flex flex-col">
-            <div className="flex justify-between items-center mb-8">
+          <div className="absolute right-0 top-0 h-full w-[85%] max-w-[320px] bg-white p-6 shadow-2xl overflow-y-auto flex flex-col">
+            <div className="flex justify-between items-center mb-6">
               <h2 className="text-xl font-black uppercase italic">Filtros</h2>
-              <button onClick={() => setIsFilterModalOpen(false)} className="p-2 bg-gray-100 rounded-full"><X size={20} /></button>
+              <button 
+                onClick={() => setIsFilterModalOpen(false)} 
+                className="p-2 bg-gray-100 rounded-full"
+              >
+                <X size={20} />
+              </button>
             </div>
             
-            <FilterSidebar
-              filters={filters}
-              setFilters={setFilters}
-              onReset={resetFilters}
-              models={filterOptions.models}
-              boltPatterns={filterOptions.boltPatterns}
-              finishes={filterOptions.finishes}
-            />
+            <div className="flex-grow">
+              <FilterSidebar
+                filters={filters}
+                setFilters={setFilters}
+                onReset={resetFilters}
+                models={filterOptions.models}
+                boltPatterns={filterOptions.boltPatterns}
+                finishes={filterOptions.finishes}
+              />
+            </div>
 
+            {/* BOTÃO PARA FECHAR E VER RESULTADOS */}
             <button 
               onClick={() => setIsFilterModalOpen(false)}
-              className="w-full mt-10 bg-black text-white py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest active:scale-95 transition-all"
+              className="w-full mt-6 bg-black text-white py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest sticky bottom-0"
             >
-              Aplicar Filtros
+              Ver {rawWheels.length} Resultados
             </button>
           </div>
         </div>
