@@ -35,11 +35,11 @@ const optimizeMedia = (url: string, width?: number, isPoster?: boolean) => {
   return url.replace("/upload/", `/upload/${params}/`);
 };
 
-// --- COMPONENTE DE NOTIFICAÇÃO (TOAST) ---
+// --- TOAST NOTIFICATION ---
 const Toast = ({ message, onClose }: { message: string | null, onClose: () => void }) => {
   useEffect(() => {
     if (message) {
-      const timer = setTimeout(onClose, 3000); // Some em 3s
+      const timer = setTimeout(onClose, 3000);
       return () => clearTimeout(timer);
     }
   }, [message, onClose]);
@@ -169,19 +169,15 @@ const WheelDetail: React.FC<WheelDetailProps> = ({ group, onBack }) => {
         ))}
       </div>
 
-      {/* MODAL DE COMPARTILHAMENTO (TEXTOS RESTAURADOS) */}
       {isModalOpen && selectedItem && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
           <div className="bg-white w-full max-w-md rounded-[2.5rem] p-8 shadow-2xl relative animate-in zoom-in">
             <button onClick={() => setIsModalOpen(false)} className="absolute top-6 right-6 text-gray-400 hover:text-black"><X size={24} /></button>
             <div className="text-center space-y-6">
               <div className="w-20 h-20 bg-blue-50 rounded-full flex items-center justify-center mx-auto"><Share2 className="text-blue-600 w-10 h-10" /></div>
-
-              {/* TÍTULO RESTAURADO */}
               <h2 className="text-2xl font-black uppercase italic tracking-tight text-gray-900">
                 {downloadStatus.active ? "Preparando Mídias" : "Relatório Técnico"}
               </h2>
-
               <div className="space-y-4 text-left bg-gray-50 p-6 rounded-3xl border border-gray-100">
                 {downloadStatus.active ? (
                   <div className="flex flex-col items-center gap-4 py-4 w-full">
@@ -190,14 +186,12 @@ const WheelDetail: React.FC<WheelDetailProps> = ({ group, onBack }) => {
                   </div>
                 ) : (
                   <>
-                    {/* TEXTOS RESTAURADOS */}
                     <div className="flex gap-3 items-start"><CheckCircle2 className="text-green-500 shrink-0 w-5 h-5" /><p className="font-bold italic text-sm text-gray-900">Download automático de mídias.</p></div>
                     <div className="flex gap-3 items-start"><CheckCircle2 className="text-green-500 shrink-0 w-5 h-5" /><p className="font-bold italic text-sm text-gray-900">Mensagem formatada para WhatsApp.</p></div>
                   </>
                 )}
               </div>
               <div className="grid grid-cols-1 gap-3">
-                {/* BOTÕES RESTAURADOS */}
                 <button disabled={downloadStatus.active} onClick={() => executeShare(selectedItem.item, selectedItem.index, false)} className={`py-6 rounded-2xl font-black uppercase text-sm tracking-widest flex items-center justify-center gap-3 transition-all ${downloadStatus.active ? "bg-blue-600 text-white" : "bg-black text-white hover:bg-gray-800 shadow-xl"}`}>
                   {downloadStatus.active ? "Processando..." : "Gerar e Enviar Relatório"}
                 </button>
@@ -217,63 +211,159 @@ const WheelDetail: React.FC<WheelDetailProps> = ({ group, onBack }) => {
   );
 };
 
-// LIGHTBOX
+// --- LIGHTBOX COM PINCH-TO-ZOOM (ZOOM PINÇA) ---
 const EnhancedLightbox = ({ mediaList, initialIndex, onClose }: { mediaList: { type: "image" | "video"; url: string }[], initialIndex: number, onClose: () => void }) => {
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
-  const [isZoomed, setIsZoomed] = useState(false);
-  const [position, setPosition] = useState({ x: 0, y: 0 });
-  const imageRef = useRef<HTMLImageElement>(null);
+  const [scale, setScale] = useState(1);
+  const [offset, setOffset] = useState({ x: 0, y: 0 });
+
+  // Refs para lógica de gestos
+  const gesture = useRef({
+    startDist: 0,
+    startScale: 1,
+    startX: 0,
+    startY: 0,
+    startOffset: { x: 0, y: 0 },
+    isPinching: false,
+    isPanning: false,
+    lastTap: 0 // Para Double Tap
+  });
+
   const currentMedia = mediaList[currentIndex];
 
-  // SWIPE LOGIC
-  const [touchStart, setTouchStart] = useState<number | null>(null);
-  const [touchEnd, setTouchEnd] = useState<number | null>(null);
-  const onTouchStart = (e: React.TouchEvent) => setTouchStart(e.targetTouches[0].clientX);
-  const onTouchMove = (e: React.TouchEvent) => {
-    setTouchEnd(e.targetTouches[0].clientX);
-    if (isZoomed && imageRef.current) {
-      const touch = e.touches[0];
-      const { left, top, width, height } = imageRef.current.getBoundingClientRect();
-      setPosition({ x: ((touch.clientX - left) / width) * 100, y: ((touch.clientY - top) / height) * 100 });
+  // Resetar ao trocar de imagem
+  useEffect(() => {
+    setScale(1);
+    setOffset({ x: 0, y: 0 });
+  }, [currentIndex]);
+
+  // Navegação
+  const next = (e?: React.MouseEvent) => { e?.stopPropagation(); setCurrentIndex((prev) => (prev + 1) % mediaList.length); };
+  const prev = (e?: React.MouseEvent) => { e?.stopPropagation(); setCurrentIndex((prev) => (prev - 1 + mediaList.length) % mediaList.length); };
+
+  // Botões de Zoom
+  const handleZoomIn = (e: React.MouseEvent) => { e.stopPropagation(); setScale(Math.min(scale * 1.5, 4)); };
+  const handleReset = (e: React.MouseEvent) => { e.stopPropagation(); setScale(1); setOffset({ x: 0, y: 0 }); };
+
+  // --- LÓGICA DE TOQUE UNIFICADA (PINCH + PAN + SWIPE) ---
+  const onTouchStart = (e: React.TouchEvent) => {
+    // Double Tap
+    const now = Date.now();
+    if (now - gesture.current.lastTap < 300) {
+      // Double tap detectado -> Zoom In/Reset
+      if (scale > 1) {
+        setScale(1);
+        setOffset({ x: 0, y: 0 });
+      } else {
+        setScale(2.5);
+      }
+    }
+    gesture.current.lastTap = now;
+
+    if (e.touches.length === 2) {
+      // PINCH START
+      gesture.current.isPinching = true;
+      gesture.current.startDist = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      gesture.current.startScale = scale;
+    } else if (e.touches.length === 1) {
+      // PAN/SWIPE START
+      gesture.current.isPanning = true;
+      gesture.current.startX = e.touches[0].clientX;
+      gesture.current.startY = e.touches[0].clientY;
+      gesture.current.startOffset = { ...offset };
     }
   };
-  const onTouchEnd = () => {
-    if (!touchStart || !touchEnd || isZoomed) return;
-    const distance = touchStart - touchEnd;
-    if (distance > 50) next();
-    if (distance < -50) prev();
-    setTouchStart(null); setTouchEnd(null);
+
+  const onTouchMove = (e: React.TouchEvent) => {
+    if (gesture.current.isPinching && e.touches.length === 2) {
+      // PINCH MOVE
+      e.preventDefault();
+      const dist = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      const delta = dist / gesture.current.startDist;
+      // Limita o zoom entre 1x e 5x
+      setScale(Math.min(Math.max(1, gesture.current.startScale * delta), 5));
+    } else if (gesture.current.isPanning && e.touches.length === 1) {
+      // PAN MOVE
+      const clientX = e.touches[0].clientX;
+      const clientY = e.touches[0].clientY;
+      const dx = clientX - gesture.current.startX;
+      const dy = clientY - gesture.current.startY;
+
+      if (scale > 1) {
+        // Se tiver zoom, move a imagem (PAN)
+        e.preventDefault();
+        setOffset({
+          x: gesture.current.startOffset.x + dx,
+          y: gesture.current.startOffset.y + dy
+        });
+      }
+    }
   };
 
-  const next = (e?: React.MouseEvent) => { e?.stopPropagation(); setCurrentIndex((prev) => (prev + 1) % mediaList.length); resetZoom(); };
-  const prev = (e?: React.MouseEvent) => { e?.stopPropagation(); setCurrentIndex((prev) => (prev - 1 + mediaList.length) % mediaList.length); resetZoom(); };
+  const onTouchEnd = (e: React.TouchEvent) => {
+    if (gesture.current.isPinching) {
+      gesture.current.isPinching = false;
+      // Se soltar com zoom menor que 1, volta pro normal
+      if (scale < 1) setScale(1);
+    } else if (gesture.current.isPanning) {
+      gesture.current.isPanning = false;
 
-  const resetZoom = () => { setIsZoomed(false); setPosition({ x: 0, y: 0 }); };
-  const toggleZoom = (e: React.MouseEvent | React.TouchEvent) => { e.stopPropagation(); if (currentMedia.type === "video") return; setIsZoomed(!isZoomed); setPosition({ x: 0, y: 0 }); };
-  const handleMove = (e: React.MouseEvent) => {
-    if (!isZoomed || !imageRef.current) return;
-    const { left, top, width, height } = imageRef.current.getBoundingClientRect();
-    setPosition({ x: ((e.clientX - left) / width) * 100, y: ((e.clientY - top) / height) * 100 });
+      // Lógica de Swipe para trocar foto (só se não tiver zoom)
+      if (scale === 1) {
+        const dx = e.changedTouches[0].clientX - gesture.current.startX;
+        if (Math.abs(dx) > 50) {
+          if (dx > 0) prev(); // Swipe Right -> Anterior
+          else next(); // Swipe Left -> Próxima
+        }
+      }
+    }
   };
+
+  // Download
   const download = async (e: React.MouseEvent) => { e.stopPropagation(); try { const r = await fetch(optimizeMedia(currentMedia.url, 2000)); const b = await r.blob(); const l = document.createElement("a"); l.href = window.URL.createObjectURL(b); l.download = `zoom_${currentIndex}.jpg`; l.click(); } catch (e) { console.error(e) } };
 
   return (
     <div className="fixed inset-0 z-[200] bg-black flex flex-col items-center justify-center animate-in fade-in" onClick={onClose}>
+      {/* Header */}
       <div className="absolute top-0 w-full p-4 flex justify-between z-50 bg-gradient-to-b from-black/50">
         <span className="text-white/80 font-mono text-xs bg-white/10 px-3 py-1 rounded-full">{currentIndex + 1}/{mediaList.length}</span>
         <div className="flex gap-4"><button onClick={download} className="p-2 bg-white/10 rounded-full text-white"><Download size={20} /></button><button onClick={onClose} className="p-2 bg-white/10 rounded-full text-white"><X size={20} /></button></div>
       </div>
 
-      <div className="relative w-full h-full flex items-center justify-center overflow-hidden cursor-zoom-in" onClick={toggleZoom} onMouseMove={handleMove} onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
-        {currentMedia.type === "video" ? <video src={currentMedia.url} controls autoPlay className="max-w-full max-h-full" onClick={e => e.stopPropagation()} /> :
-          <img ref={imageRef} src={optimizeMedia(currentMedia.url, 2000)} className={`max-w-full max-h-full transition-transform duration-200 ${isZoomed ? "cursor-move" : "cursor-zoom-in"}`} style={isZoomed ? { transform: "scale(2.5)", transformOrigin: `${position.x}% ${position.y}%` } : {}} />}
+      {/* Área da Imagem */}
+      <div
+        className="relative w-full h-full flex items-center justify-center overflow-hidden touch-none"
+        onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
+        onTouchEnd={onTouchEnd}
+      >
+        {currentMedia.type === "video" ? (
+          <video src={currentMedia.url} controls autoPlay className="max-w-full max-h-full" onClick={e => e.stopPropagation()} />
+        ) : (
+          <img
+            src={optimizeMedia(currentMedia.url, 2000)}
+            className="max-w-full max-h-full transition-transform duration-75 ease-linear"
+            style={{
+              transform: `scale(${scale}) translate(${offset.x / scale}px, ${offset.y / scale}px)`,
+              cursor: scale > 1 ? "grab" : "zoom-in"
+            }}
+          />
+        )}
       </div>
 
+      {/* Controles Inferiores */}
       <div className="absolute bottom-8 flex items-center gap-8 z-50" onClick={e => e.stopPropagation()}>
         <button onClick={prev} className="w-12 h-12 bg-white/10 rounded-full flex items-center justify-center text-white backdrop-blur-md hover:bg-white/20"><ChevronLeft size={24} /></button>
-        {currentMedia.type === "image" && (isZoomed ?
-          <button onClick={resetZoom} className="px-5 py-2.5 bg-blue-600 text-white rounded-full text-xs font-bold uppercase tracking-widest flex items-center gap-2 shadow-xl hover:bg-blue-700 transition-all transform hover:scale-105"><ZoomOut size={16} /> RESETAR</button> :
-          <button onClick={toggleZoom} className="px-5 py-2.5 bg-white/10 text-white rounded-full text-xs font-bold uppercase tracking-widest flex items-center gap-2 backdrop-blur-md border border-white/20 hover:bg-white/20 transition-all"><ZoomIn size={16} /> AMPLIAR</button>
+        {currentMedia.type === "image" && (
+          scale > 1 ?
+            <button onClick={handleReset} className="px-5 py-2.5 bg-blue-600 text-white rounded-full text-xs font-bold uppercase tracking-widest flex items-center gap-2 shadow-xl hover:bg-blue-700 transition-all transform hover:scale-105"><ZoomOut size={16} /> RESETAR</button> :
+            <button onClick={handleZoomIn} className="px-5 py-2.5 bg-white/10 text-white rounded-full text-xs font-bold uppercase tracking-widest flex items-center gap-2 backdrop-blur-md border border-white/20 hover:bg-white/20 transition-all"><ZoomIn size={16} /> AMPLIAR</button>
         )}
         <button onClick={next} className="w-12 h-12 bg-white/10 rounded-full flex items-center justify-center text-white backdrop-blur-md hover:bg-white/20"><ChevronRight size={24} /></button>
       </div>
@@ -286,6 +376,7 @@ const IndividualWheelCard: React.FC<{ item: IndividualWheel; index: number; onSh
   const mediaList = useMemo(() => [...photos.map((u) => ({ type: "image" as const, url: u })), ...(item.video_url ? [{ type: "video" as const, url: item.video_url }] : [])], [photos, item.video_url]);
   const [active, setActive] = useState(0);
 
+  // Swipe simples para o card principal (antes de abrir o zoom)
   const [touchStart, setTouchStart] = useState<number | null>(null);
   const [touchEnd, setTouchEnd] = useState<number | null>(null);
   const onTouchStart = (e: React.TouchEvent) => setTouchStart(e.targetTouches[0].clientX);
@@ -293,7 +384,8 @@ const IndividualWheelCard: React.FC<{ item: IndividualWheel; index: number; onSh
   const onTouchEnd = () => {
     if (!touchStart || !touchEnd) return;
     const distance = touchStart - touchEnd;
-    if (distance > 50) next(); if (distance < -50) prev();
+    if (distance > 50) setActive((prev) => (prev + 1) % mediaList.length);
+    if (distance < -50) setActive((prev) => (prev - 1 + mediaList.length) % mediaList.length);
     setTouchStart(null); setTouchEnd(null);
   };
 
