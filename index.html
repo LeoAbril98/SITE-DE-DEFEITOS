@@ -2,17 +2,155 @@
 <html lang="pt-BR">
     <head>
         <meta charset="UTF-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>Catálogo de Defeitos de Rodas</title>
+        <link rel="icon" type="image/png" href="/favicon-32x32.png" />
+        <meta
+            name="viewport"
+            content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+        />
+
+        <title>Catálogo de Rodas</title>
+
+        <meta name="apple-mobile-web-app-title" content="RodasApp" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta
+            name="apple-mobile-web-app-status-bar-style"
+            content="black-translucent"
+        />
+        <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+
+        <link rel="manifest" href="/site.webmanifest" />
+        <meta name="theme-color" content="#ffffff" />
+
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
         <link
-            href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
+            href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap"
             rel="stylesheet"
         />
+
+        <style>
+            body,
+            html {
+                margin: 0;
+                padding: 0;
+                width: 100%;
+                height: 100%;
+                background-color: #ffffff;
+                overflow: hidden;
+            }
+            body.loaded {
+                overflow: unset;
+            }
+
+            #splash-screen {
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background-color: #ffffff;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                z-index: 99999; /* Garantir que fique acima de tudo */
+                transition:
+                    opacity 0.6s cubic-bezier(0.4, 0, 0.2, 1),
+                    visibility 0.6s;
+            }
+
+            .splash-logo {
+                width: 160px; /* Aumentado de 120px para 160px */
+                height: auto;
+                margin-bottom: 24px;
+                animation: pulse 2s infinite ease-in-out;
+            }
+
+            .splash-title {
+                font-family: "Inter", sans-serif;
+                font-weight: 900;
+                text-transform: uppercase;
+                font-style: italic;
+                letter-spacing: -0.02em;
+                font-size: 28px; /* Aumentado */
+                color: #000000;
+            }
+
+            /* Barra de loading maior e mais visível */
+            .loader-container {
+                width: 120px; /* Largura da barra aumentada */
+                height: 4px;
+                background-color: #f0f0f0;
+                margin-top: 30px;
+                position: relative;
+                overflow: hidden;
+                border-radius: 20px;
+            }
+
+            .loader-bar {
+                position: absolute;
+                width: 60%;
+                height: 100%;
+                background-color: #000000;
+                animation: loading 1.8s infinite ease-in-out;
+                border-radius: 20px;
+            }
+
+            @keyframes pulse {
+                0%,
+                100% {
+                    transform: scale(1);
+                    opacity: 1;
+                }
+                50% {
+                    transform: scale(1.08);
+                    opacity: 0.9;
+                }
+            }
+
+            @keyframes loading {
+                0% {
+                    left: -60%;
+                }
+                100% {
+                    left: 100%;
+                }
+            }
+
+            /* Saída elegante */
+            body.loaded #splash-screen {
+                opacity: 0;
+                visibility: hidden;
+                pointer-events: none;
+            }
+        </style>
     </head>
     <body>
+        <div id="splash-screen">
+            <img src="/apple-touch-icon.png" alt="Logo" class="splash-logo" />
+            <div class="splash-title">RodasApp</div>
+            <div class="loader-container">
+                <div class="loader-bar"></div>
+            </div>
+        </div>
+
         <div id="root"></div>
+
+        <script>
+            // Função global que o React chamará quando o catálogo carregar
+            window.hideSplashScreen = function () {
+                // Pequeno delay para a animação do React terminar
+                setTimeout(function () {
+                    document.body.classList.add("loaded");
+                }, 500);
+            };
+
+            // Fallback de segurança: Se o React falhar, remove a splash após 5 segundos
+            setTimeout(function () {
+                document.body.classList.add("loaded");
+            }, 5000);
+        </script>
+
         <script type="module" src="/src/index.tsx"></script>
     </body>
 </html>
