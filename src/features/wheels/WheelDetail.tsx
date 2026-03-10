@@ -79,7 +79,7 @@ const addWatermarkToImageBlob = async (blob: Blob, text: string): Promise<Blob> 
         ctx.lineTo(x + boxWidth - radius, y);
         ctx.quadraticCurveTo(x + boxWidth, y, x + boxWidth, y + radius);
         ctx.lineTo(x + boxWidth, y + boxHeight - radius);
-        ctx.quadraticCurveCurveTo(x + boxWidth, y + boxHeight, x + boxWidth - radius, y + boxHeight);
+        ctx.quadraticCurveTo(x + boxWidth, y + boxHeight, x + boxWidth - radius, y + boxHeight);
         ctx.lineTo(x + radius, y + boxHeight);
         ctx.quadraticCurveTo(x, y + boxHeight, x, y + boxHeight - radius);
         ctx.lineTo(x, y + radius);
