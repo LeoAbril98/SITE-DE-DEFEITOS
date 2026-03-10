@@ -69,30 +69,50 @@ const WheelDetail: React.FC<WheelDetailProps> = ({ group, onBack }) => {
     const currentUrl = window.location.href;
     const bolt = (group.boltPattern || (group as any).bolt_pattern || "").toString();
     const technicalInfo = `${group.model} ${group.size} ${bolt} ${group.finish}`;
+    
+    if (index === -1) {
+      const lines = group.wheels.map((_, i) => `${group.model} Roda ${i + 1}`).join('\n');
+      return `*MKR RODAS*\n\n${lines}\n\n🔗 *Link:* ${currentUrl}`;
+    }
+    
     return `*MKR RODAS - RELATÓRIO TÉCNICO*\n\n${technicalInfo.toUpperCase()}\n*Unidade:* #${index + 1}\n\n🔗 *Link:* ${currentUrl}`;
   };
 
-  const handleShareClick = (item: IndividualWheel, index: number) => {
+  const handleShareClick = (item: IndividualWheel | null, index: number) => {
     const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-    setSelectedItem({ item, index });
+    setSelectedItem({ item: item || group.wheels[0], index });
     setIsModalOpen(true);
-    if (isMobile) executeShare(item, index, true);
+    if (isMobile) executeShare(item || group.wheels[0], index, true);
   };
 
   const executeShare = async (item: IndividualWheel, index: number, isMobile: boolean) => {
-    const allMedia = [...(item.photos || []), ...(item.video_url ? [item.video_url] : [])];
+    let allMedia: { url: string; name: string }[] = [];
+    if (index === -1) {
+      group.wheels.forEach((w, idx) => {
+         const m = [...(w.photos || []), ...(w.video_url ? [w.video_url] : [])];
+         m.forEach((url, mediaIdx) => {
+           allMedia.push({ url, name: `mkr_${group.model}_u${idx + 1}_${mediaIdx + 1}` });
+         });
+      });
+    } else {
+      const m = [...(item.photos || []), ...(item.video_url ? [item.video_url] : [])];
+      m.forEach((url, mediaIdx) => {
+           allMedia.push({ url, name: `mkr_${group.model}_u${index + 1}_${mediaIdx + 1}` });
+      });
+    }
+
     setDownloadStatus({ active: true, current: 0, total: allMedia.length });
 
     try {
       if (!isMobile) {
         for (let i = 0; i < allMedia.length; i++) {
           setDownloadStatus((prev) => ({ ...prev, current: i + 1 }));
-          const response = await fetch(optimizeMedia(allMedia[i], 1200));
+          const response = await fetch(optimizeMedia(allMedia[i].url, 1200));
           const blob = await response.blob();
           const link = document.createElement("a");
           link.href = window.URL.createObjectURL(blob);
-          const ext = allMedia[i].includes("/video/") ? "mp4" : "jpg";
-          link.download = `mkr_${group.model}_u${index + 1}_${i + 1}.${ext}`;
+          const ext = allMedia[i].url.includes("/video/") ? "mp4" : "jpg";
+          link.download = `${allMedia[i].name}.${ext}`;
           document.body.appendChild(link);
           link.click();
           document.body.removeChild(link);
@@ -100,23 +120,27 @@ const WheelDetail: React.FC<WheelDetailProps> = ({ group, onBack }) => {
         }
         setToastMessage("Download concluído com sucesso!");
       } else if (allMedia.length > 0 && navigator.share) {
-        const filesToShare: File[] = [];
-        const mediaToProcess = allMedia.slice(0, 4);
-        for (let i = 0; i < mediaToProcess.length; i++) {
-          setDownloadStatus((prev) => ({ ...prev, current: i + 1 }));
-          const response = await fetch(optimizeMedia(mediaToProcess[i], 800));
+        let completed = 0;
+        const uploadPromises = allMedia.map(async (media) => {
+          const response = await fetch(optimizeMedia(media.url, 800));
           const blob = await response.blob();
-          const isVideo = mediaToProcess[i].includes("/video/");
-          filesToShare.push(new File([blob], `mkr_${i}.${isVideo ? "mp4" : "jpg"}`, { type: isVideo ? "video/mp4" : "image/jpeg" }));
-        }
+          completed++;
+          setDownloadStatus((prev) => ({ ...prev, current: completed }));
+          const isVideo = media.url.includes("/video/");
+          return new File([blob], `${media.name}.${isVideo ? "mp4" : "jpg"}`, { type: isVideo ? "video/mp4" : "image/jpeg" });
+        });
+        const filesToShare = await Promise.all(uploadPromises);
+        
+        // Wait just a bit to ensure UI updates before block
+        await new Promise(r => setTimeout(r, 100));
+
         await navigator.share({ files: filesToShare, text: getTechnicalMessage(index) });
+      } else {
+        window.open(`https://wa.me/?text=${encodeURIComponent(getTechnicalMessage(index))}`, "_blank");
       }
     } catch (err) {
       console.error(err);
     } finally {
-      if (isMobile && downloadStatus.active) {
-        window.open(`https://wa.me/?text=${encodeURIComponent(getTechnicalMessage(index))}`, "_blank");
-      }
       setDownloadStatus({ active: false, current: 0, total: 0 });
       setIsModalOpen(false);
     }
@@ -147,6 +171,9 @@ const WheelDetail: React.FC<WheelDetailProps> = ({ group, onBack }) => {
             </div>
           </div>
         </div>
+        <button onClick={() => handleShareClick(null, -1)} className="bg-[#25D366] text-white py-4 px-6 rounded-2xl font-black uppercase text-sm sm:text-base flex items-center justify-center gap-3 shadow-xl transition-all active:scale-95 self-start md:self-end shrink-0">
+          <Share2 size={24} /> Compartilhar Rodas
+        </button>
       </div>
 
       <div className="space-y-32">
