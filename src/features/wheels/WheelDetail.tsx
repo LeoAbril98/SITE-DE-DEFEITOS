@@ -32,7 +32,7 @@ const optimizeMedia = (url: string, width?: number, isPoster?: boolean) => {
 };
 
 const addWatermarkToImageBlob = async (blob: Blob, text: string): Promise<Blob> => {
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve) => {
     const img = new Image();
     img.onload = () => {
       const canvas = document.createElement("canvas");
@@ -44,35 +44,69 @@ const addWatermarkToImageBlob = async (blob: Blob, text: string): Promise<Blob> 
       // Draw original image
       ctx.drawImage(img, 0, 0);
 
-      // We want to add a visible label at the bottom or top left
-      const padding = Math.max(20, img.width * 0.05);
-      const fontSize = Math.max(40, img.width * 0.08); // responsive font size
+      const isPortrait = img.height > img.width;
 
-      ctx.font = `black italic ${fontSize}px Arial`; // Bold/Black italic text
-      ctx.textBaseline = "top";
-      ctx.textAlign = "left";
+      // Responsive sizing
+      const fontSize = Math.max(30, img.width * 0.05);
+      const paddingX = fontSize * 1.2;
+      const paddingY = fontSize * 0.6;
+
+      ctx.font = `900 italic ${fontSize}px sans-serif`; // Heavy, italic, modern sans-serif
+      ctx.textBaseline = "middle";
+      ctx.textAlign = "center";
 
       const textWidth = ctx.measureText(text).width;
-      const boxWidth = textWidth + padding * 2;
-      const boxHeight = fontSize + padding * 1.5;
+      const boxWidth = textWidth + paddingX * 2;
+      const boxHeight = fontSize + paddingY * 2;
 
-      const x = padding;
-      const y = padding;
+      // Center at bottom
+      const margin = img.height * 0.05; // 5% from bottom
+      const centerX = img.width / 2;
+      const centerY = img.height - margin - boxHeight / 2;
 
-      // Draw dark background box with some opacity
-      ctx.fillStyle = "rgba(0, 0, 0, 0.7)";
+      const x = centerX - boxWidth / 2;
+      const y = centerY - boxHeight / 2;
+      const radius = boxHeight / 2; // fully rounded pill
+
+      // Draw pill background (glassmorphism/translucent dark)
+      ctx.fillStyle = "rgba(0, 0, 0, 0.55)"; // Softer dark background
       ctx.beginPath();
-      ctx.roundRect ? ctx.roundRect(x, y, boxWidth, boxHeight, 16) : ctx.fillRect(x, y, boxWidth, boxHeight);
+      // Polyfill for roundRect
+      if (ctx.roundRect) {
+        ctx.roundRect(x, y, boxWidth, boxHeight, radius);
+      } else {
+        ctx.moveTo(x + radius, y);
+        ctx.lineTo(x + boxWidth - radius, y);
+        ctx.quadraticCurveTo(x + boxWidth, y, x + boxWidth, y + radius);
+        ctx.lineTo(x + boxWidth, y + boxHeight - radius);
+        ctx.quadraticCurveCurveTo(x + boxWidth, y + boxHeight, x + boxWidth - radius, y + boxHeight);
+        ctx.lineTo(x + radius, y + boxHeight);
+        ctx.quadraticCurveTo(x, y + boxHeight, x, y + boxHeight - radius);
+        ctx.lineTo(x, y + radius);
+        ctx.quadraticCurveTo(x, y, x + radius, y);
+      }
       ctx.fill();
 
+      // Add a subtle white stroke for glass effect
+      ctx.lineWidth = Math.max(2, img.width * 0.003);
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.4)";
+      ctx.stroke();
+
       // Draw text
-      ctx.fillStyle = "white";
-      ctx.fillText(text, x + padding, y + padding * 0.75);
+      // 1. Text shadow for readability
+      ctx.shadowColor = "rgba(0, 0, 0, 0.8)";
+      ctx.shadowBlur = 8;
+      ctx.fillStyle = "#ffffff";
+      ctx.fillText(text, centerX, centerY + fontSize * 0.05); // slight optical adjustment
+
+      // Reset shadows
+      ctx.shadowColor = "transparent";
+      ctx.shadowBlur = 0;
 
       canvas.toBlob((watermarkedBlob) => {
         if (watermarkedBlob) resolve(watermarkedBlob);
         else resolve(blob); // fallback
-      }, "image/jpeg", 0.9);
+      }, "image/jpeg", 0.95); // High quality
     };
     img.onerror = () => resolve(blob); // fallback if it fails
     img.src = URL.createObjectURL(blob);
